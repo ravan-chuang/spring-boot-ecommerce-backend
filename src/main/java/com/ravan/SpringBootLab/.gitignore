@@ -1,0 +1,40 @@
+# Maven
+target/
+*.class
+
+# Logs
+*.log
+logs/
+
+# Mac
+.DS_Store
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# VS Code
+.vscode/
+
+# Eclipse
+.project
+.classpath
+.settings/
+
+# Environment variables
+.env
+.env.*
+
+# Spring Boot
+application-local.properties
+application-dev.properties
+application-prod.properties
+
+# Docker
+*.pid
+
+# Temporary files
+*.tmp
+*.swp
