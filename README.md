@@ -145,6 +145,7 @@ This project uses Docker Compose to run infrastructure services.
 
 Services:
 
+- Spring Boot application
 - PostgreSQL
 - Redis
 - Kafka
@@ -161,9 +162,55 @@ Stop services:
 docker compose down
 ```
 
-## How to Run
+## Run with Docker Compose
 
-### 1. Start Docker services
+The entire backend stack can be started with Docker Compose.
+
+This includes:
+
+- Spring Boot application
+- PostgreSQL
+- Redis
+- Kafka
+
+### Start the full stack
+
+```bash
+docker compose up --build
+```
+
+The Spring Boot application will be available at:
+
+```text
+http://localhost:8080
+```
+
+Swagger UI:
+
+```text
+http://localhost:8080/swagger-ui.html
+```
+
+### Stop the full stack
+
+```bash
+docker compose down
+```
+
+### Important Kafka Note
+
+The Docker Compose configuration uses different Kafka listeners for host access and container-to-container communication.
+
+- Host machine: `localhost:9092`
+- Spring Boot container: `kafka:29092`
+
+This prevents Kafka clients inside Docker from incorrectly connecting to `localhost:9092`.
+
+## How to Run Locally
+
+Use this mode if you want to run only PostgreSQL, Redis, and Kafka with Docker, while running the Spring Boot application directly on your machine.
+
+### 1. Start infrastructure services
 
 ```bash
 docker compose up -d
@@ -311,12 +358,18 @@ Consumed PaymentPaidEvent: paymentId=7, orderId=10, amount=89999.00, method=CRED
 - Global exception handling
 - Structured logging
 
+## Completed Engineering Improvements
+
+- Added GitHub Actions CI pipeline
+- Added Product API integration tests
+- Added Payment Idempotency integration tests
+- Added Dockerfile for the Spring Boot application
+- Added Docker Compose full-stack runtime
+
 ## Future Improvements
 
 - Add JWT authentication and role-based authorization
-- Add unit tests and integration tests
-- Add GitHub Actions CI pipeline
-- Add Dockerfile for the Spring Boot application
+- Add more unit tests and integration tests
 - Add Kafka retry and dead-letter queue
 - Add Flyway database migration
 - Add deployment environment
