@@ -32,3 +32,20 @@ build/
 ### VS Code ###
 .vscode/
 .DS_Store
+
+# Environment variables
+.env
+.env.*
+
+# Spring Boot local config
+application-local.properties
+application-dev.properties
+application-prod.properties
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.swp
