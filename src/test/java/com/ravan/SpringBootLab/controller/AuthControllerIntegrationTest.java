@@ -1,5 +1,6 @@
 package com.ravan.SpringBootLab.controller;
 
+import com.ravan.SpringBootLab.TestcontainersIntegrationTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -18,7 +19,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "spring.kafka.listener.auto-startup=false"
 })
 @AutoConfigureMockMvc
-class AuthControllerIntegrationTest {
+class AuthControllerIntegrationTest extends TestcontainersIntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;

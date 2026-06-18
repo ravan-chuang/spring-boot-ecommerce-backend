@@ -1,5 +1,6 @@
 package com.ravan.SpringBootLab.controller;
 
+import com.ravan.SpringBootLab.TestcontainersIntegrationTest;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ravan.SpringBootLab.model.User;
@@ -27,7 +28,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "spring.kafka.listener.auto-startup=false"
 })
 @AutoConfigureMockMvc
-class ProductControllerIntegrationTest {
+class ProductControllerIntegrationTest extends TestcontainersIntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;
