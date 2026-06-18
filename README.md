@@ -378,3 +378,7 @@ Consumed PaymentPaidEvent: paymentId=7, orderId=10, amount=89999.00, method=CRED
 - Add deployment environment
 - Add performance testing
 - Add monitoring with Spring Boot Actuator, Prometheus, and Grafana
+
+## License
+
+This project is licensed under the MIT License.
