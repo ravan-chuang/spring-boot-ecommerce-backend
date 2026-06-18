@@ -1,5 +1,8 @@
 # Spring Boot E-Commerce Backend
 
+[![CI](https://github.com/ravan-chuang/spring-boot-ecommerce-backend/actions/workflows/ci.yml/badge.svg)](https://github.com/ravan-chuang/spring-boot-ecommerce-backend/actions/workflows/ci.yml)
+
+
 A production-oriented e-commerce backend built with Spring Boot, PostgreSQL, Redis, and Kafka.
 
 This project is not only a basic CRUD system. It focuses on backend engineering concepts such as transactional order processing, optimistic locking, payment idempotency, Redis caching, and Kafka-based event-driven architecture.
