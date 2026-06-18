@@ -2,9 +2,9 @@
 
 [![CI](https://github.com/ravan-chuang/spring-boot-ecommerce-backend/actions/workflows/ci.yml/badge.svg)](https://github.com/ravan-chuang/spring-boot-ecommerce-backend/actions/workflows/ci.yml)
 
-A production-oriented e-commerce backend built with Spring Boot, PostgreSQL, Redis, Kafka, JWT authentication, and role-based authorization.
+A production-oriented e-commerce backend built with Spring Boot, PostgreSQL, Redis, Kafka, JWT authentication, role-based authorization, user ownership checks, and Spring Boot Actuator health checks.
 
-This project is not only a basic CRUD system. It focuses on backend engineering concepts such as transactional order processing, optimistic locking, payment idempotency, Redis caching, Kafka-based event-driven architecture, JWT authentication, and ADMIN/USER authorization.
+This project is not only a basic CRUD system. It focuses on backend engineering concepts such as transactional order processing, optimistic locking, payment idempotency, Redis caching, Kafka-based event-driven architecture, JWT authentication, ADMIN/USER authorization, user ownership checks, and service health monitoring.
 
 ## Tech Stack
 
@@ -33,7 +33,8 @@ This project is not only a basic CRUD system. It focuses on backend engineering 
 - USER and ADMIN roles
 - Public product read APIs
 - ADMIN-only product create, update, and delete APIs
-- Integration tests for authentication and product authorization
+- Authenticated USER ownership checks for cart, order, and payment APIs
+- Integration tests for authentication, product authorization, user ownership, payment idempotency, and full order flow
 
 ### User and Product APIs
 
@@ -49,6 +50,7 @@ This project is not only a basic CRUD system. It focuses on backend engineering 
 - Update cart item quantity
 - Remove cart items
 - Calculate item subtotal
+- Require authenticated users to access only their own cart resources
 
 ### Order System
 
@@ -57,6 +59,7 @@ This project is not only a basic CRUD system. It focuses on backend engineering 
 - Deduct product stock during order creation
 - Use `@Transactional` to ensure order consistency
 - Prevent overselling with optimistic locking
+- Require authenticated users to access only their own orders
 
 ### Payment System
 
@@ -64,6 +67,7 @@ This project is not only a basic CRUD system. It focuses on backend engineering 
 - Support payment method such as `CREDIT_CARD`
 - Update order status after successful payment
 - Prevent duplicate payment with `Idempotency-Key`
+- Require authenticated users to pay only their own orders
 
 
 ## Authentication and Authorization
@@ -82,19 +86,34 @@ Example authorization header:
 Authorization: Bearer <JWT_TOKEN>
 ```
 
-### Role Rules
+### Authorization Rules
 
 ```text
-GET    /api/products/**      Public
-POST   /api/products         ADMIN only
-PUT    /api/products/**      ADMIN only
-DELETE /api/products/**      ADMIN only
+GET    /api/products/**              Public
+POST   /api/products                 ADMIN only
+PUT    /api/products/**              ADMIN only
+DELETE /api/products/**              ADMIN only
 
-POST   /api/auth/register    Public
-POST   /api/auth/login       Public
+POST   /api/users/{userId}/cart/**   Authenticated user owner or ADMIN
+GET    /api/users/{userId}/cart/**    Authenticated user owner or ADMIN
+PUT    /api/users/{userId}/cart/**    Authenticated user owner or ADMIN
+DELETE /api/users/{userId}/cart/**    Authenticated user owner or ADMIN
+
+POST   /api/users/{userId}/orders/** Authenticated user owner or ADMIN
+GET    /api/users/{userId}/orders/**  Authenticated user owner or ADMIN
+GET    /api/orders/{orderId}          Order owner or ADMIN
+POST   /api/orders/{orderId}/cancel   Order owner or ADMIN
+
+POST   /api/orders/{orderId}/payments Order owner or ADMIN
+GET    /api/orders/{orderId}/payment  Order owner or ADMIN
+
+POST   /api/auth/register             Public
+POST   /api/auth/login                Public
+GET    /actuator/health               Public
+GET    /actuator/info                 Public
 ```
 
-Current implementation protects product write APIs with ADMIN authorization. Cart, order, and payment APIs are kept open for the current demo flow and can be protected in a future phase with USER ownership checks.
+Product write APIs require the `ADMIN` role. Cart, order, and payment APIs require authentication and enforce ownership checks, so normal users can only operate on their own cart, orders, and payments. ADMIN users can pass ownership checks for management and testing scenarios.
 
 ## Kafka Event-Driven Architecture
 
@@ -231,7 +250,7 @@ Example response:
 {
   "app": {
     "name": "Spring Boot E-Commerce Backend",
-    "description": "Production-oriented e-commerce backend with JWT, Redis, Kafka, Docker, and CI",
+    "description": "Production-oriented e-commerce backend with JWT, ownership authorization, Redis, Kafka, Docker, and CI",
     "version": "1.0.0"
   }
 }
@@ -329,10 +348,10 @@ http://localhost:8080/swagger-ui.html
 
 ## API Demo Flow
 
-The following demo shows a complete e-commerce backend flow with JWT authentication and ADMIN product authorization:
+The following demo shows a complete e-commerce backend flow with JWT authentication, ADMIN product authorization, and USER ownership checks:
 
 ```text
-Register Admin → Promote Admin Role → Login Admin → Create Product → Create User → Add Product to Cart → Create Order → Pay Order
+Register Admin → Promote Admin Role → Login Admin → Create Product → Register User → Login User → Add Product to Cart with USER token → Create Order with USER token → Pay Own Order with USER token
 ```
 
 Before running the demo, make sure the full stack is running:
@@ -485,13 +504,33 @@ Example response:
 
 Save the returned user id for the next steps.
 
-### 6. Add product to cart
+### 6. Login as normal user and save the JWT token
+
+```bash
+curl -i -X POST http://localhost:8080/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "demo-user@example.com",
+    "password": "password123"
+  }'
+```
+
+Save the returned token:
+
+```bash
+USER_TOKEN="<USER_JWT_TOKEN>"
+```
+
+### 7. Add product to cart
 
 Replace `{userId}` and `{productId}` with the ids returned from the previous steps.
+
+`POST /api/users/{userId}/cart/items` requires a JWT token belonging to the same user, or an ADMIN token.
 
 ```bash
 curl -i -X POST http://localhost:8080/api/users/{userId}/cart/items \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $USER_TOKEN" \
   -d '{
     "productId": {productId},
     "quantity": 1
@@ -506,10 +545,11 @@ Expected result:
 }
 ```
 
-### 7. Create an order from cart
+### 8. Create an order from cart
 
 ```bash
-curl -i -X POST http://localhost:8080/api/users/{userId}/orders
+curl -i -X POST http://localhost:8080/api/users/{userId}/orders \
+  -H "Authorization: Bearer $USER_TOKEN"
 ```
 
 Expected result:
@@ -533,13 +573,14 @@ After this step:
 
 Save the returned order id.
 
-### 8. Pay the order
+### 9. Pay the order
 
 Replace `{orderId}` with the actual order id.
 
 ```bash
 curl -i -X POST http://localhost:8080/api/orders/{orderId}/payments \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $USER_TOKEN" \
   -H "Idempotency-Key: pay-order-{orderId}-001" \
   -d '{
     "method": "CREDIT_CARD"
@@ -564,13 +605,14 @@ After this step:
 - The order status becomes `PAID`
 - A `payment-paid` event is published to Kafka
 
-### 9. Verify payment idempotency
+### 10. Verify payment idempotency
 
 Run the same payment request again with the same `Idempotency-Key`:
 
 ```bash
 curl -i -X POST http://localhost:8080/api/orders/{orderId}/payments \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $USER_TOKEN" \
   -H "Idempotency-Key: pay-order-{orderId}-001" \
   -d '{
     "method": "CREDIT_CARD"
@@ -584,6 +626,24 @@ The API returns the existing payment result instead of creating a duplicate paym
 ```
 
 This demonstrates payment idempotency, which is commonly used in real payment systems to prevent duplicate charges.
+
+### 11. Verify USER ownership authorization
+
+A normal USER token can only access its own cart, orders, and payments.
+
+For example, using a token from another user to access this user's cart should be rejected:
+
+```bash
+curl -i -X GET http://localhost:8080/api/users/{userId}/cart/items \
+  -H "Authorization: Bearer <OTHER_USER_JWT_TOKEN>"
+```
+
+Expected result:
+
+```text
+403 Forbidden
+```
+
 
 ## Kafka Verification
 
@@ -637,6 +697,7 @@ Consumed PaymentPaidEvent: paymentId=7, orderId=10, amount=89999.00, method=CRED
 - Layered architecture
 - JWT authentication
 - Role-based authorization
+- User ownership authorization
 - BCrypt password hashing
 - Transaction management
 - JPA entity relationships
@@ -659,14 +720,15 @@ Consumed PaymentPaidEvent: paymentId=7, orderId=10, amount=89999.00, method=CRED
 - Added Payment Idempotency integration tests
 - Added Auth integration tests
 - Added Product ADMIN authorization integration tests
+- Added USER ownership authorization for cart, order, and payment APIs
 - Added JWT authentication and role-based authorization
 - Added Dockerfile for the Spring Boot application
 - Added Docker Compose full-stack runtime
 - Added Spring Boot Actuator health and info endpoints
+- Updated full order flow and payment tests to use JWT ownership authorization
 
 ## Future Improvements
 
-- Protect cart, order, and payment APIs with USER ownership checks
 - Add refresh token and token revocation support
 - Add more unit tests and integration tests
 - Add Testcontainers for PostgreSQL, Redis, and Kafka integration tests
