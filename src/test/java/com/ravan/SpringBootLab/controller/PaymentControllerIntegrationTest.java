@@ -2,9 +2,9 @@ package com.ravan.SpringBootLab.controller;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.ravan.SpringBootLab.security.JwtService;
-import com.ravan.SpringBootLab.repository.UserRepository;
 import com.ravan.SpringBootLab.model.User;
+import com.ravan.SpringBootLab.repository.UserRepository;
+import com.ravan.SpringBootLab.security.JwtService;
 import com.ravan.SpringBootLab.service.EventProducer;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -49,29 +49,29 @@ class PaymentControllerIntegrationTest {
 
     @Test
     void shouldReturnSamePaymentWhenUsingSameIdempotencyKey() throws Exception {
-        Integer userId = createUserAndReturnId();
+        TestUser testUser = createTestUser("USER");
         Integer productId = createProductAndReturnId();
 
-        addProductToCart(userId, productId);
+        addProductToCart(testUser.userId(), testUser.token(), productId);
 
-        Integer orderId = createOrderAndReturnId(userId);
+        Integer orderId = createOrderAndReturnId(testUser.userId(), testUser.token());
 
         String idempotencyKey = "payment-test-key-" + System.currentTimeMillis();
 
-        Integer firstPaymentId = payOrderAndReturnPaymentId(orderId, idempotencyKey);
-        Integer secondPaymentId = payOrderAndReturnPaymentId(orderId, idempotencyKey);
+        Integer firstPaymentId = payOrderAndReturnPaymentId(orderId, testUser.token(), idempotencyKey);
+        Integer secondPaymentId = payOrderAndReturnPaymentId(orderId, testUser.token(), idempotencyKey);
 
         assertEquals(firstPaymentId, secondPaymentId);
     }
 
     @Test
     void shouldRejectPaymentWithoutIdempotencyKey() throws Exception {
-        Integer userId = createUserAndReturnId();
+        TestUser testUser = createTestUser("USER");
         Integer productId = createProductAndReturnId();
 
-        addProductToCart(userId, productId);
+        addProductToCart(testUser.userId(), testUser.token(), productId);
 
-        Integer orderId = createOrderAndReturnId(userId);
+        Integer orderId = createOrderAndReturnId(testUser.userId(), testUser.token());
 
         String requestJson = """
                 {
@@ -80,31 +80,10 @@ class PaymentControllerIntegrationTest {
                 """;
 
         mockMvc.perform(post("/api/orders/{orderId}/payments", orderId)
+                        .header("Authorization", "Bearer " + testUser.token())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestJson))
                 .andExpect(status().isBadRequest());
-    }
-
-    private Integer createUserAndReturnId() throws Exception {
-        String requestJson = """
-                {
-                  "name": "Payment Test User",
-                  "email": "payment-test-user-%d@example.com",
-                  "password": "password123",
-                  "skill": "Java Backend"
-                }
-                """.formatted(System.currentTimeMillis());
-
-        String response = mockMvc.perform(post("/api/users")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(requestJson))
-                .andExpect(status().isOk())
-                .andReturn()
-                .getResponse()
-                .getContentAsString();
-
-        JsonNode jsonNode = objectMapper.readTree(response);
-        return jsonNode.get("data").get("id").asInt();
     }
 
     private Integer createProductAndReturnId() throws Exception {
@@ -130,7 +109,7 @@ class PaymentControllerIntegrationTest {
         return jsonNode.get("data").get("id").asInt();
     }
 
-    private void addProductToCart(Integer userId, Integer productId) throws Exception {
+    private void addProductToCart(Integer userId, String token, Integer productId) throws Exception {
         String requestJson = """
                 {
                   "productId": %d,
@@ -139,13 +118,15 @@ class PaymentControllerIntegrationTest {
                 """.formatted(productId);
 
         mockMvc.perform(post("/api/users/{userId}/cart/items", userId)
+                        .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestJson))
                 .andExpect(status().isOk());
     }
 
-    private Integer createOrderAndReturnId(Integer userId) throws Exception {
-        String response = mockMvc.perform(post("/api/users/{userId}/orders", userId))
+    private Integer createOrderAndReturnId(Integer userId, String token) throws Exception {
+        String response = mockMvc.perform(post("/api/users/{userId}/orders", userId)
+                        .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status", is("PENDING")))
                 .andReturn()
@@ -156,7 +137,11 @@ class PaymentControllerIntegrationTest {
         return jsonNode.get("data").get("id").asInt();
     }
 
-    private Integer payOrderAndReturnPaymentId(Integer orderId, String idempotencyKey) throws Exception {
+    private Integer payOrderAndReturnPaymentId(
+            Integer orderId,
+            String token,
+            String idempotencyKey
+    ) throws Exception {
         String requestJson = """
                 {
                   "method": "CREDIT_CARD"
@@ -164,6 +149,7 @@ class PaymentControllerIntegrationTest {
                 """;
 
         String response = mockMvc.perform(post("/api/orders/{orderId}/payments", orderId)
+                        .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .header("Idempotency-Key", idempotencyKey)
                         .content(requestJson))
@@ -178,8 +164,14 @@ class PaymentControllerIntegrationTest {
     }
 
     private String createAdminToken() {
-        User admin = createUserWithRole("ADMIN");
-        return jwtService.generateToken(admin);
+        TestUser admin = createTestUser("ADMIN");
+        return admin.token();
+    }
+
+    private TestUser createTestUser(String role) {
+        User user = createUserWithRole(role);
+        String token = jwtService.generateToken(user);
+        return new TestUser(user.getId(), token);
     }
 
     private User createUserWithRole(String role) {
@@ -196,4 +188,6 @@ class PaymentControllerIntegrationTest {
         return userRepository.save(user);
     }
 
+    private record TestUser(Integer userId, String token) {
+    }
 }

@@ -43,8 +43,10 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.PUT, "/api/products/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/api/products/**").hasRole("ADMIN")
 
-                        // Other APIs are kept open for now.
-                        // Next phase can protect cart, order, and payment APIs for USER.
+                        .requestMatchers("/api/users/*/cart/**").authenticated()
+                        .requestMatchers("/api/users/*/orders/**").authenticated()
+                        .requestMatchers("/api/orders/**").authenticated()
+
                         .anyRequest().permitAll()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)

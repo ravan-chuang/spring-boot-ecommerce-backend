@@ -2,9 +2,9 @@ package com.ravan.SpringBootLab.controller;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.ravan.SpringBootLab.security.JwtService;
-import com.ravan.SpringBootLab.repository.UserRepository;
 import com.ravan.SpringBootLab.model.User;
+import com.ravan.SpringBootLab.repository.UserRepository;
+import com.ravan.SpringBootLab.security.JwtService;
 import com.ravan.SpringBootLab.service.EventProducer;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,8 +18,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.util.UUID;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest(properties = {
         "spring.kafka.listener.auto-startup=false"
@@ -47,34 +47,14 @@ class OrderFlowIntegrationTest {
 
     @Test
     void shouldCreateOrderFromCartAndPaySuccessfully() throws Exception {
-        Integer userId = createUser();
+        TestUser testUser = createTestUser("USER");
         Integer productId = createProduct();
 
-        addProductToCart(userId, productId);
+        addProductToCart(testUser.userId(), testUser.token(), productId);
 
-        Integer orderId = createOrder(userId);
+        Integer orderId = createOrder(testUser.userId(), testUser.token());
 
-        payOrder(orderId);
-    }
-
-    private Integer createUser() throws Exception {
-        String userJson = """
-                {
-                  "name": "Order Flow Test User",
-                  "email": "order-flow-test-user@example.com",
-                  "skill": "Java Backend"
-                }
-                """;
-
-        String response = mockMvc.perform(post("/api/users")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(userJson))
-                .andExpect(status().isOk())
-                .andReturn()
-                .getResponse()
-                .getContentAsString();
-
-        return extractId(response);
+        payOrder(orderId, testUser.token());
     }
 
     private Integer createProduct() throws Exception {
@@ -99,7 +79,7 @@ class OrderFlowIntegrationTest {
         return extractId(response);
     }
 
-    private void addProductToCart(Integer userId, Integer productId) throws Exception {
+    private void addProductToCart(Integer userId, String token, Integer productId) throws Exception {
         String cartJson = """
                 {
                   "productId": %d,
@@ -108,13 +88,15 @@ class OrderFlowIntegrationTest {
                 """.formatted(productId);
 
         mockMvc.perform(post("/api/users/{userId}/cart/items", userId)
+                        .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(cartJson))
                 .andExpect(status().isOk());
     }
 
-    private Integer createOrder(Integer userId) throws Exception {
-        String response = mockMvc.perform(post("/api/users/{userId}/orders", userId))
+    private Integer createOrder(Integer userId, String token) throws Exception {
+        String response = mockMvc.perform(post("/api/users/{userId}/orders", userId)
+                        .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("PENDING"))
                 .andReturn()
@@ -124,7 +106,7 @@ class OrderFlowIntegrationTest {
         return extractId(response);
     }
 
-    private void payOrder(Integer orderId) throws Exception {
+    private void payOrder(Integer orderId, String token) throws Exception {
         String paymentJson = """
                 {
                   "method": "CREDIT_CARD"
@@ -132,6 +114,7 @@ class OrderFlowIntegrationTest {
                 """;
 
         mockMvc.perform(post("/api/orders/{orderId}/payments", orderId)
+                        .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .header("Idempotency-Key", "order-flow-test-" + orderId)
                         .content(paymentJson))
@@ -168,8 +151,14 @@ class OrderFlowIntegrationTest {
     }
 
     private String createAdminToken() {
-        User admin = createUserWithRole("ADMIN");
-        return jwtService.generateToken(admin);
+        TestUser admin = createTestUser("ADMIN");
+        return admin.token();
+    }
+
+    private TestUser createTestUser(String role) {
+        User user = createUserWithRole(role);
+        String token = jwtService.generateToken(user);
+        return new TestUser(user.getId(), token);
     }
 
     private User createUserWithRole(String role) {
@@ -186,4 +175,6 @@ class OrderFlowIntegrationTest {
         return userRepository.save(user);
     }
 
+    private record TestUser(Integer userId, String token) {
+    }
 }

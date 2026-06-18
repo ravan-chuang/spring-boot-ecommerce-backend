@@ -3,6 +3,7 @@ package com.ravan.SpringBootLab.controller;
 import com.ravan.SpringBootLab.dto.ApiResponse;
 import com.ravan.SpringBootLab.dto.CreatePaymentRequest;
 import com.ravan.SpringBootLab.dto.PaymentResponse;
+import com.ravan.SpringBootLab.security.CurrentUserService;
 import com.ravan.SpringBootLab.service.PaymentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -15,9 +16,14 @@ import org.springframework.web.bind.annotation.*;
 public class PaymentController {
 
     private final PaymentService paymentService;
+    private final CurrentUserService currentUserService;
 
-    public PaymentController(PaymentService paymentService) {
+    public PaymentController(
+            PaymentService paymentService,
+            CurrentUserService currentUserService
+    ) {
         this.paymentService = paymentService;
+        this.currentUserService = currentUserService;
     }
 
     @Operation(summary = "Pay order", description = "Simulate payment for an order")
@@ -27,8 +33,10 @@ public class PaymentController {
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @Valid @RequestBody CreatePaymentRequest request
     ) {
+        currentUserService.requireOrderOwnerOrAdmin(orderId);
+
         PaymentResponse payment = paymentService.payOrder(
-                orderId, 
+                orderId,
                 request,
                 idempotencyKey
         );
@@ -47,6 +55,8 @@ public class PaymentController {
     public ResponseEntity<ApiResponse<PaymentResponse>> getPaymentByOrder(
             @PathVariable Integer orderId
     ) {
+        currentUserService.requireOrderOwnerOrAdmin(orderId);
+
         PaymentResponse payment = paymentService.getPaymentByOrder(orderId);
 
         return ResponseEntity.ok(

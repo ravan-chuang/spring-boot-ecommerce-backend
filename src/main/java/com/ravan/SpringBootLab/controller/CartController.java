@@ -4,6 +4,7 @@ import com.ravan.SpringBootLab.dto.AddCartItemRequest;
 import com.ravan.SpringBootLab.dto.ApiResponse;
 import com.ravan.SpringBootLab.dto.CartItemResponse;
 import com.ravan.SpringBootLab.dto.UpdateCartItemRequest;
+import com.ravan.SpringBootLab.security.CurrentUserService;
 import com.ravan.SpringBootLab.service.CartService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -18,9 +19,14 @@ import java.util.List;
 public class CartController {
 
     private final CartService cartService;
+    private final CurrentUserService currentUserService;
 
-    public CartController(CartService cartService) {
+    public CartController(
+            CartService cartService,
+            CurrentUserService currentUserService
+    ) {
         this.cartService = cartService;
+        this.currentUserService = currentUserService;
     }
 
     @Operation(summary = "Add item to cart", description = "Add a product to user's shopping cart")
@@ -29,6 +35,8 @@ public class CartController {
             @PathVariable Integer userId,
             @Valid @RequestBody AddCartItemRequest request
     ) {
+        currentUserService.requireUserIdOrAdmin(userId);
+
         CartItemResponse cartItem = cartService.addItemToCart(userId, request);
 
         return ResponseEntity.ok(
@@ -45,6 +53,8 @@ public class CartController {
     public ResponseEntity<ApiResponse<List<CartItemResponse>>> getCartItems(
             @PathVariable Integer userId
     ) {
+        currentUserService.requireUserIdOrAdmin(userId);
+
         List<CartItemResponse> cartItems = cartService.getCartItems(userId);
 
         return ResponseEntity.ok(
@@ -63,6 +73,8 @@ public class CartController {
             @PathVariable Integer cartItemId,
             @Valid @RequestBody UpdateCartItemRequest request
     ) {
+        currentUserService.requireUserIdOrAdmin(userId);
+
         CartItemResponse cartItem = cartService.updateCartItem(
                 userId,
                 cartItemId,
@@ -84,6 +96,8 @@ public class CartController {
             @PathVariable Integer userId,
             @PathVariable Integer cartItemId
     ) {
+        currentUserService.requireUserIdOrAdmin(userId);
+
         cartService.deleteCartItem(userId, cartItemId);
 
         return ResponseEntity.ok(
