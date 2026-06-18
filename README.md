@@ -20,6 +20,7 @@ This project is not only a basic CRUD system. It focuses on backend engineering 
 - Apache Kafka
 - Docker Compose
 - Swagger / OpenAPI
+- Spring Boot Actuator
 - Maven
 
 ## Core Features
@@ -184,6 +185,58 @@ flowchart TD
     OrderTopic --> OrderConsumer[OrderCreatedEvent Consumer]
     PaymentTopic --> PaymentConsumer[PaymentPaidEvent Consumer]
 ```
+
+## Observability and Health Checks
+
+This project uses Spring Boot Actuator to expose service health and application metadata.
+
+Available endpoints:
+
+```text
+/actuator/health
+/actuator/info
+```
+
+The health endpoint reports the status of important runtime components such as:
+
+- PostgreSQL
+- Redis
+- Disk space
+- Liveness state
+- Readiness state
+
+Example:
+
+```bash
+curl http://localhost:8080/actuator/health
+```
+
+Example response:
+
+```json
+{
+  "status": "UP"
+}
+```
+
+The info endpoint exposes basic application metadata:
+
+```bash
+curl http://localhost:8080/actuator/info
+```
+
+Example response:
+
+```json
+{
+  "app": {
+    "name": "Spring Boot E-Commerce Backend",
+    "description": "Production-oriented e-commerce backend with JWT, Redis, Kafka, Docker, and CI",
+    "version": "1.0.0"
+  }
+}
+```
+
 
 ## Docker Services
 
@@ -596,6 +649,8 @@ Consumed PaymentPaidEvent: paymentId=7, orderId=10, amount=89999.00, method=CRED
 - Dockerized infrastructure
 - Global exception handling
 - Structured logging
+- Service health checks
+- Liveness and readiness checks
 
 ## Completed Engineering Improvements
 
@@ -607,6 +662,7 @@ Consumed PaymentPaidEvent: paymentId=7, orderId=10, amount=89999.00, method=CRED
 - Added JWT authentication and role-based authorization
 - Added Dockerfile for the Spring Boot application
 - Added Docker Compose full-stack runtime
+- Added Spring Boot Actuator health and info endpoints
 
 ## Future Improvements
 
@@ -618,7 +674,7 @@ Consumed PaymentPaidEvent: paymentId=7, orderId=10, amount=89999.00, method=CRED
 - Add Flyway database migration
 - Add deployment environment
 - Add performance testing
-- Add monitoring with Spring Boot Actuator, Prometheus, and Grafana
+- Add monitoring with Prometheus and Grafana
 
 ## License
 
