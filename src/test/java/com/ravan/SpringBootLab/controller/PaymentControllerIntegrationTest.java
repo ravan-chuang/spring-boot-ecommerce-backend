@@ -2,14 +2,20 @@ package com.ravan.SpringBootLab.controller;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ravan.SpringBootLab.security.JwtService;
+import com.ravan.SpringBootLab.repository.UserRepository;
+import com.ravan.SpringBootLab.model.User;
 import com.ravan.SpringBootLab.service.EventProducer;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+
+import java.util.UUID;
 
 import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -28,6 +34,15 @@ class PaymentControllerIntegrationTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
+    @Autowired
+    private JwtService jwtService;
 
     @MockitoBean
     private EventProducer eventProducer;
@@ -103,6 +118,7 @@ class PaymentControllerIntegrationTest {
                 """;
 
         String response = mockMvc.perform(post("/api/products")
+                        .header("Authorization", "Bearer " + createAdminToken())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestJson))
                 .andExpect(status().isOk())
@@ -160,4 +176,24 @@ class PaymentControllerIntegrationTest {
         JsonNode jsonNode = objectMapper.readTree(response);
         return jsonNode.get("data").get("id").asInt();
     }
+
+    private String createAdminToken() {
+        User admin = createUserWithRole("ADMIN");
+        return jwtService.generateToken(admin);
+    }
+
+    private User createUserWithRole(String role) {
+        String email = role.toLowerCase() + "-" + UUID.randomUUID() + "@example.com";
+
+        User user = new User(
+                role + " Test User",
+                email,
+                "Java Backend",
+                passwordEncoder.encode("password123"),
+                role
+        );
+
+        return userRepository.save(user);
+    }
+
 }
