@@ -2,15 +2,17 @@
 
 [![CI](https://github.com/ravan-chuang/spring-boot-ecommerce-backend/actions/workflows/ci.yml/badge.svg)](https://github.com/ravan-chuang/spring-boot-ecommerce-backend/actions/workflows/ci.yml)
 
-A production-oriented e-commerce backend built with Spring Boot, PostgreSQL, Redis, and Kafka.
+A production-oriented e-commerce backend built with Spring Boot, PostgreSQL, Redis, Kafka, JWT authentication, and role-based authorization.
 
-This project is not only a basic CRUD system. It focuses on backend engineering concepts such as transactional order processing, optimistic locking, payment idempotency, Redis caching, and Kafka-based event-driven architecture.
+This project is not only a basic CRUD system. It focuses on backend engineering concepts such as transactional order processing, optimistic locking, payment idempotency, Redis caching, Kafka-based event-driven architecture, JWT authentication, and ADMIN/USER authorization.
 
 ## Tech Stack
 
 - Java 25
 - Spring Boot 4
 - Spring Web
+- Spring Security
+- JWT
 - Spring Data JPA
 - Hibernate
 - PostgreSQL
@@ -22,10 +24,21 @@ This project is not only a basic CRUD system. It focuses on backend engineering 
 
 ## Core Features
 
+### Authentication and Authorization
+
+- User registration and login
+- Password hashing with BCrypt
+- JWT token generation
+- USER and ADMIN roles
+- Public product read APIs
+- ADMIN-only product create, update, and delete APIs
+- Integration tests for authentication and product authorization
+
 ### User and Product APIs
 
 - Create, read, update, and delete users
-- Create, read, update, and delete products
+- Public product read APIs
+- ADMIN-only product create, update, and delete APIs
 - Product stock management
 - Product caching with Redis
 
@@ -50,6 +63,37 @@ This project is not only a basic CRUD system. It focuses on backend engineering 
 - Support payment method such as `CREDIT_CARD`
 - Update order status after successful payment
 - Prevent duplicate payment with `Idempotency-Key`
+
+
+## Authentication and Authorization
+
+The project uses JWT-based authentication with Spring Security.
+
+### Authentication Flow
+
+```text
+Register / Login → Receive JWT → Send JWT in Authorization header
+```
+
+Example authorization header:
+
+```http
+Authorization: Bearer <JWT_TOKEN>
+```
+
+### Role Rules
+
+```text
+GET    /api/products/**      Public
+POST   /api/products         ADMIN only
+PUT    /api/products/**      ADMIN only
+DELETE /api/products/**      ADMIN only
+
+POST   /api/auth/register    Public
+POST   /api/auth/login       Public
+```
+
+Current implementation protects product write APIs with ADMIN authorization. Cart, order, and payment APIs are kept open for the current demo flow and can be protected in a future phase with USER ownership checks.
 
 ## Kafka Event-Driven Architecture
 
@@ -232,10 +276,10 @@ http://localhost:8080/swagger-ui.html
 
 ## API Demo Flow
 
-The following demo shows a complete e-commerce backend flow:
+The following demo shows a complete e-commerce backend flow with JWT authentication and ADMIN product authorization:
 
 ```text
-Create User → Create Product → Add Product to Cart → Create Order → Pay Order
+Register Admin → Promote Admin Role → Login Admin → Create Product → Create User → Add Product to Cart → Create Order → Pay Order
 ```
 
 Before running the demo, make sure the full stack is running:
@@ -250,15 +294,34 @@ The API server should be available at:
 http://localhost:8080
 ```
 
-### 1. Create a user
+### 1. Register an admin account
 
 ```bash
-curl -i -X POST http://localhost:8080/api/users \
+curl -i -X POST http://localhost:8080/api/auth/register \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "Demo User",
-    "email": "demo-user@example.com",
+    "name": "Admin User",
+    "email": "admin@example.com",
+    "password": "password123",
     "skill": "Java Backend"
+  }'
+```
+
+By default, newly registered users are created with the `USER` role. For this demo, promote the account to `ADMIN` directly in PostgreSQL:
+
+```bash
+docker exec -it spring_boot_lab_postgres psql -U ravan -d spring_boot_lab \
+  -c "UPDATE users SET role = 'ADMIN' WHERE email = 'admin@example.com';"
+```
+
+### 2. Login as admin and save the JWT token
+
+```bash
+curl -i -X POST http://localhost:8080/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "admin@example.com",
+    "password": "password123"
   }'
 ```
 
@@ -266,22 +329,29 @@ Example response:
 
 ```json
 {
-  "message": "User created successfully",
+  "message": "Login successfully",
   "data": {
-    "id": 1,
-    "name": "Demo User",
-    "email": "demo-user@example.com"
+    "token": "<ADMIN_JWT_TOKEN>",
+    "email": "admin@example.com",
+    "role": "ADMIN"
   }
 }
 ```
 
-Save the returned user id for the next steps.
+Save the returned token:
 
-### 2. Create a product
+```bash
+ADMIN_TOKEN="<ADMIN_JWT_TOKEN>"
+```
+
+### 3. Create a product with ADMIN token
+
+`POST /api/products` requires an ADMIN JWT token.
 
 ```bash
 curl -i -X POST http://localhost:8080/api/products \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
   -d '{
     "name": "MacBook Pro M3",
     "description": "Demo product for order flow",
@@ -306,7 +376,63 @@ Example response:
 
 Save the returned product id.
 
-### 3. Add product to cart
+### 4. Verify product write authorization
+
+Creating a product without a token should be rejected:
+
+```bash
+curl -i -X POST http://localhost:8080/api/products \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Unauthorized Product",
+    "description": "This request should be rejected",
+    "price": 1000,
+    "stock": 1
+  }'
+```
+
+Expected result:
+
+```text
+403 Forbidden
+```
+
+Reading products is public:
+
+```bash
+curl -i http://localhost:8080/api/products
+```
+
+### 5. Create a normal user
+
+```bash
+curl -i -X POST http://localhost:8080/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Demo User",
+    "email": "demo-user@example.com",
+    "password": "password123",
+    "skill": "Java Backend"
+  }'
+```
+
+Example response:
+
+```json
+{
+  "message": "Register successfully",
+  "data": {
+    "id": 2,
+    "name": "Demo User",
+    "email": "demo-user@example.com",
+    "role": "USER"
+  }
+}
+```
+
+Save the returned user id for the next steps.
+
+### 6. Add product to cart
 
 Replace `{userId}` and `{productId}` with the ids returned from the previous steps.
 
@@ -327,7 +453,7 @@ Expected result:
 }
 ```
 
-### 4. Create an order from cart
+### 7. Create an order from cart
 
 ```bash
 curl -i -X POST http://localhost:8080/api/users/{userId}/orders
@@ -354,7 +480,7 @@ After this step:
 
 Save the returned order id.
 
-### 5. Pay the order
+### 8. Pay the order
 
 Replace `{orderId}` with the actual order id.
 
@@ -385,7 +511,7 @@ After this step:
 - The order status becomes `PAID`
 - A `payment-paid` event is published to Kafka
 
-### 6. Verify payment idempotency
+### 9. Verify payment idempotency
 
 Run the same payment request again with the same `Idempotency-Key`:
 
@@ -456,6 +582,9 @@ Consumed PaymentPaidEvent: paymentId=7, orderId=10, amount=89999.00, method=CRED
 
 - RESTful API design
 - Layered architecture
+- JWT authentication
+- Role-based authorization
+- BCrypt password hashing
 - Transaction management
 - JPA entity relationships
 - Optimistic locking
@@ -473,13 +602,18 @@ Consumed PaymentPaidEvent: paymentId=7, orderId=10, amount=89999.00, method=CRED
 - Added GitHub Actions CI pipeline
 - Added Product API integration tests
 - Added Payment Idempotency integration tests
+- Added Auth integration tests
+- Added Product ADMIN authorization integration tests
+- Added JWT authentication and role-based authorization
 - Added Dockerfile for the Spring Boot application
 - Added Docker Compose full-stack runtime
 
 ## Future Improvements
 
-- Add JWT authentication and role-based authorization
+- Protect cart, order, and payment APIs with USER ownership checks
+- Add refresh token and token revocation support
 - Add more unit tests and integration tests
+- Add Testcontainers for PostgreSQL, Redis, and Kafka integration tests
 - Add Kafka retry and dead-letter queue
 - Add Flyway database migration
 - Add deployment environment
