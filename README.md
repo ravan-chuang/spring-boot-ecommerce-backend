@@ -2,7 +2,6 @@
 
 [![CI](https://github.com/ravan-chuang/spring-boot-ecommerce-backend/actions/workflows/ci.yml/badge.svg)](https://github.com/ravan-chuang/spring-boot-ecommerce-backend/actions/workflows/ci.yml)
 
-
 A production-oriented e-commerce backend built with Spring Boot, PostgreSQL, Redis, and Kafka.
 
 This project is not only a basic CRUD system. It focuses on backend engineering concepts such as transactional order processing, optimistic locking, payment idempotency, Redis caching, and Kafka-based event-driven architecture.
@@ -233,34 +232,105 @@ http://localhost:8080/swagger-ui.html
 
 ## API Demo Flow
 
-### 1. Update product stock
+The following demo shows a complete e-commerce backend flow:
+
+```text
+Create User → Create Product → Add Product to Cart → Create Order → Pay Order
+```
+
+Before running the demo, make sure the full stack is running:
 
 ```bash
-curl -i -X PUT http://localhost:8080/api/products/1 \
+docker compose up --build
+```
+
+The API server should be available at:
+
+```text
+http://localhost:8080
+```
+
+### 1. Create a user
+
+```bash
+curl -i -X POST http://localhost:8080/api/users \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Demo User",
+    "email": "demo-user@example.com",
+    "skill": "Java Backend"
+  }'
+```
+
+Example response:
+
+```json
+{
+  "message": "User created successfully",
+  "data": {
+    "id": 1,
+    "name": "Demo User",
+    "email": "demo-user@example.com"
+  }
+}
+```
+
+Save the returned user id for the next steps.
+
+### 2. Create a product
+
+```bash
+curl -i -X POST http://localhost:8080/api/products \
   -H "Content-Type: application/json" \
   -d '{
     "name": "MacBook Pro M3",
-    "description": "Kafka final test product",
+    "description": "Demo product for order flow",
     "price": 89999,
     "stock": 5
   }'
 ```
 
-### 2. Add item to cart
+Example response:
+
+```json
+{
+  "message": "Product created successfully",
+  "data": {
+    "id": 1,
+    "name": "MacBook Pro M3",
+    "price": 89999,
+    "stock": 5
+  }
+}
+```
+
+Save the returned product id.
+
+### 3. Add product to cart
+
+Replace `{userId}` and `{productId}` with the ids returned from the previous steps.
 
 ```bash
-curl -i -X POST http://localhost:8080/api/users/1/cart/items \
+curl -i -X POST http://localhost:8080/api/users/{userId}/cart/items \
   -H "Content-Type: application/json" \
   -d '{
-    "productId": 1,
+    "productId": {productId},
     "quantity": 1
   }'
 ```
 
-### 3. Create order
+Expected result:
+
+```json
+{
+  "message": "Cart item added successfully"
+}
+```
+
+### 4. Create an order from cart
 
 ```bash
-curl -i -X POST http://localhost:8080/api/users/1/orders
+curl -i -X POST http://localhost:8080/api/users/{userId}/orders
 ```
 
 Expected result:
@@ -269,12 +339,22 @@ Expected result:
 {
   "message": "Order created successfully",
   "data": {
-    "status": "PENDING"
+    "id": 1,
+    "status": "PENDING",
+    "totalAmount": 89999
   }
 }
 ```
 
-### 4. Pay order
+After this step:
+
+- The order is created with status `PENDING`
+- Product stock is deducted
+- An `order-created` event is published to Kafka
+
+Save the returned order id.
+
+### 5. Pay the order
 
 Replace `{orderId}` with the actual order id.
 
@@ -298,6 +378,33 @@ Expected result:
   }
 }
 ```
+
+After this step:
+
+- The payment is created
+- The order status becomes `PAID`
+- A `payment-paid` event is published to Kafka
+
+### 6. Verify payment idempotency
+
+Run the same payment request again with the same `Idempotency-Key`:
+
+```bash
+curl -i -X POST http://localhost:8080/api/orders/{orderId}/payments \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: pay-order-{orderId}-001" \
+  -d '{
+    "method": "CREDIT_CARD"
+  }'
+```
+
+Expected behavior:
+
+```text
+The API returns the existing payment result instead of creating a duplicate payment.
+```
+
+This demonstrates payment idempotency, which is commonly used in real payment systems to prevent duplicate charges.
 
 ## Kafka Verification
 
