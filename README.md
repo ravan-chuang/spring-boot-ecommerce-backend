@@ -2,9 +2,9 @@
 
 [![CI](https://github.com/ravan-chuang/spring-boot-ecommerce-backend/actions/workflows/ci.yml/badge.svg)](https://github.com/ravan-chuang/spring-boot-ecommerce-backend/actions/workflows/ci.yml)
 
-A production-oriented e-commerce backend built with Spring Boot, PostgreSQL, Redis, Kafka, JWT authentication, role-based authorization, user ownership checks, and Spring Boot Actuator health checks.
+A production-oriented e-commerce backend built with Spring Boot, PostgreSQL, Redis, Kafka, JWT authentication, role-based authorization, user ownership checks, Flyway database migrations, and Spring Boot Actuator health checks.
 
-This project is not only a basic CRUD system. It focuses on backend engineering concepts such as transactional order processing, optimistic locking, payment idempotency, Redis caching, Kafka-based event-driven architecture, JWT authentication, ADMIN/USER authorization, user ownership checks, and service health monitoring.
+This project is not only a basic CRUD system. It focuses on backend engineering concepts such as transactional order processing, optimistic locking, payment idempotency, Redis caching, Kafka-based event-driven architecture, JWT authentication, ADMIN/USER authorization, user ownership checks, Flyway-managed schema versioning, and service health monitoring.
 
 ## Tech Stack
 
@@ -16,6 +16,7 @@ This project is not only a basic CRUD system. It focuses on backend engineering 
 - Spring Data JPA
 - Hibernate
 - PostgreSQL
+- Flyway
 - Redis
 - Apache Kafka
 - Docker Compose
@@ -68,6 +69,15 @@ This project is not only a basic CRUD system. It focuses on backend engineering 
 - Update order status after successful payment
 - Prevent duplicate payment with `Idempotency-Key`
 - Require authenticated users to pay only their own orders
+
+
+
+### Database Migration
+
+- Manage PostgreSQL schema with Flyway migrations
+- Initialize database schema with `V1__init_schema.sql`
+- Replace Hibernate auto schema updates with schema validation
+- Keep database structure version-controlled and reproducible
 
 
 ## Authentication and Authorization
@@ -186,6 +196,49 @@ Product stock updates use optimistic locking to prevent overselling under concur
 
 The product table includes a `version` column managed by JPA `@Version`.
 
+
+## Flyway Database Migration
+
+This project uses Flyway to manage PostgreSQL schema versions.
+
+The initial database schema is defined in:
+
+```text
+src/main/resources/db/migration/V1__init_schema.sql
+```
+
+Hibernate is configured to validate the schema instead of automatically updating it:
+
+```properties
+spring.jpa.hibernate.ddl-auto=validate
+spring.flyway.enabled=true
+spring.flyway.locations=classpath:db/migration
+```
+
+This makes the database schema reproducible, version-controlled, and closer to a production backend workflow.
+
+To reset the local database and rerun migrations:
+
+```bash
+docker compose down -v
+docker compose up -d postgres redis kafka
+./mvnw test
+```
+
+Flyway migration history can be checked with:
+
+```bash
+docker exec -it spring_boot_lab_postgres psql -U ravan -d spring_boot_lab \
+  -c "SELECT installed_rank, version, description, success FROM flyway_schema_history;"
+```
+
+Expected result:
+
+```text
+1 | 1 | init schema | t
+```
+
+
 ## System Architecture
 
 ```mermaid
@@ -219,6 +272,7 @@ Available endpoints:
 The health endpoint reports the status of important runtime components such as:
 
 - PostgreSQL
+- Flyway
 - Redis
 - Disk space
 - Liveness state
@@ -265,6 +319,7 @@ Services:
 
 - Spring Boot application
 - PostgreSQL
+- Flyway
 - Redis
 - Kafka
 
@@ -288,6 +343,7 @@ This includes:
 
 - Spring Boot application
 - PostgreSQL
+- Flyway
 - Redis
 - Kafka
 
@@ -333,6 +389,8 @@ Use this mode if you want to run only PostgreSQL, Redis, and Kafka with Docker, 
 ```bash
 docker compose up -d
 ```
+
+Flyway will automatically run database migrations when the Spring Boot application starts.
 
 ### 2. Run Spring Boot
 
@@ -701,6 +759,8 @@ Consumed PaymentPaidEvent: paymentId=7, orderId=10, amount=89999.00, method=CRED
 - BCrypt password hashing
 - Transaction management
 - JPA entity relationships
+- Flyway database migration
+- Schema versioning
 - Optimistic locking
 - Stock consistency
 - Payment idempotency
@@ -725,6 +785,7 @@ Consumed PaymentPaidEvent: paymentId=7, orderId=10, amount=89999.00, method=CRED
 - Added Dockerfile for the Spring Boot application
 - Added Docker Compose full-stack runtime
 - Added Spring Boot Actuator health and info endpoints
+- Added Flyway database migration with schema validation
 - Updated full order flow and payment tests to use JWT ownership authorization
 
 ## Future Improvements
@@ -733,7 +794,6 @@ Consumed PaymentPaidEvent: paymentId=7, orderId=10, amount=89999.00, method=CRED
 - Add more unit tests and integration tests
 - Add Testcontainers for PostgreSQL, Redis, and Kafka integration tests
 - Add Kafka retry and dead-letter queue
-- Add Flyway database migration
 - Add deployment environment
 - Add performance testing
 - Add monitoring with Prometheus and Grafana
