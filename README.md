@@ -2,9 +2,9 @@
 
 [![CI](https://github.com/ravan-chuang/spring-boot-ecommerce-backend/actions/workflows/ci.yml/badge.svg)](https://github.com/ravan-chuang/spring-boot-ecommerce-backend/actions/workflows/ci.yml)
 
-A production-oriented e-commerce backend built with Spring Boot, PostgreSQL, Redis, Kafka, JWT authentication, role-based authorization, user ownership checks, Flyway database migrations, and Spring Boot Actuator health checks.
+A production-oriented e-commerce backend built with Spring Boot, PostgreSQL, Redis, Kafka, JWT authentication, role-based authorization, user ownership checks, Flyway database migrations, Testcontainers-based integration tests, and Spring Boot Actuator health checks.
 
-This project is not only a basic CRUD system. It focuses on backend engineering concepts such as transactional order processing, optimistic locking, payment idempotency, Redis caching, Kafka-based event-driven architecture, JWT authentication, ADMIN/USER authorization, user ownership checks, Flyway-managed schema versioning, and service health monitoring.
+This project is not only a basic CRUD system. It focuses on backend engineering concepts such as transactional order processing, optimistic locking, payment idempotency, Redis caching, Kafka-based event-driven architecture, JWT authentication, ADMIN/USER authorization, user ownership checks, Flyway-managed schema versioning, self-contained integration testing with Testcontainers, and service health monitoring.
 
 ## Tech Stack
 
@@ -20,6 +20,7 @@ This project is not only a basic CRUD system. It focuses on backend engineering 
 - Redis
 - Apache Kafka
 - Docker Compose
+- Testcontainers
 - Swagger / OpenAPI
 - Spring Boot Actuator
 - Maven
@@ -35,7 +36,7 @@ This project is not only a basic CRUD system. It focuses on backend engineering 
 - Public product read APIs
 - ADMIN-only product create, update, and delete APIs
 - Authenticated USER ownership checks for cart, order, and payment APIs
-- Integration tests for authentication, product authorization, user ownership, payment idempotency, and full order flow
+- Testcontainers-based integration tests for authentication, product authorization, user ownership, payment idempotency, and full order flow
 
 ### User and Product APIs
 
@@ -238,6 +239,54 @@ Expected result:
 1 | 1 | init schema | t
 ```
 
+## Testcontainers Integration Testing
+
+This project uses Testcontainers to run integration tests with real infrastructure services instead of relying on manually started local containers.
+
+Testcontainers automatically starts test-time containers for:
+
+- PostgreSQL
+- Redis
+- Kafka
+
+The shared Testcontainers configuration is defined in:
+
+```text
+src/test/java/com/ravan/SpringBootLab/TestcontainersIntegrationTest.java
+```
+
+The integration tests dynamically inject container connection properties into Spring Boot:
+
+```text
+spring.datasource.url
+spring.datasource.username
+spring.datasource.password
+spring.data.redis.host
+spring.data.redis.port
+spring.kafka.bootstrap-servers
+```
+
+This makes the test suite more reproducible and closer to a CI-friendly backend workflow.
+
+Run all tests:
+
+```bash
+./mvnw test
+```
+
+Expected result:
+
+```text
+Tests run: 16, Failures: 0, Errors: 0, Skipped: 0
+BUILD SUCCESS
+```
+
+For Docker Desktop on macOS, this project includes a test resource file to ensure Docker Java API compatibility:
+
+```text
+src/test/resources/docker-java.properties
+```
+
 
 ## System Architecture
 
@@ -304,7 +353,7 @@ Example response:
 {
   "app": {
     "name": "Spring Boot E-Commerce Backend",
-    "description": "Production-oriented e-commerce backend with JWT, ownership authorization, Redis, Kafka, Docker, and CI",
+    "description": "Production-oriented e-commerce backend with JWT, ownership authorization, Redis, Kafka, Flyway, Testcontainers, Docker, and CI",
     "version": "1.0.0"
   }
 }
@@ -403,6 +452,25 @@ Flyway will automatically run database migrations when the Spring Boot applicati
 ```text
 http://localhost:8080/swagger-ui.html
 ```
+
+## How to Run Tests
+
+The integration tests use Testcontainers, so PostgreSQL, Redis, and Kafka are started automatically during the test run.
+
+Make sure Docker Desktop is running, then execute:
+
+```bash
+./mvnw test
+```
+
+You do not need to manually start Docker Compose services before running the test suite.
+
+If Docker Desktop on macOS cannot be detected automatically, set the Docker socket path:
+
+```bash
+export DOCKER_HOST=unix://$HOME/.docker/run/docker.sock
+```
+
 
 ## API Demo Flow
 
@@ -768,6 +836,8 @@ Consumed PaymentPaidEvent: paymentId=7, orderId=10, amount=89999.00, method=CRED
 - Kafka event-driven architecture
 - Consumer groups
 - Dockerized infrastructure
+- Testcontainers-based integration testing
+- Self-contained integration tests
 - Global exception handling
 - Structured logging
 - Service health checks
@@ -786,13 +856,14 @@ Consumed PaymentPaidEvent: paymentId=7, orderId=10, amount=89999.00, method=CRED
 - Added Docker Compose full-stack runtime
 - Added Spring Boot Actuator health and info endpoints
 - Added Flyway database migration with schema validation
+- Added Testcontainers-based integration test infrastructure
+- Added self-contained integration tests for PostgreSQL, Redis, and Kafka
 - Updated full order flow and payment tests to use JWT ownership authorization
 
 ## Future Improvements
 
 - Add refresh token and token revocation support
 - Add more unit tests and integration tests
-- Add Testcontainers for PostgreSQL, Redis, and Kafka integration tests
 - Add Kafka retry and dead-letter queue
 - Add deployment environment
 - Add performance testing
