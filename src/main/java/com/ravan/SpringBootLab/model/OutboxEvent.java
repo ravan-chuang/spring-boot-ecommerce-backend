@@ -48,6 +48,12 @@ public class OutboxEvent {
     @Column(name = "last_error", columnDefinition = "TEXT")
     private String lastError;
 
+    @Column(name = "processing_at")
+    private LocalDateTime processingAt;
+
+    @Column(name = "processing_by")
+    private String processingBy;
+
     public OutboxEvent() {
     }
 
@@ -113,22 +119,32 @@ public class OutboxEvent {
         return lastError;
     }
 
+    public LocalDateTime getProcessingAt() {
+        return processingAt;
+    }
+    
+    public String getProcessingBy() {
+        return processingBy;
+    }
+
     public void markPublished() {
         this.status = OutboxEventStatus.PUBLISHED;
         this.publishedAt = LocalDateTime.now();
         this.lastError = null;
+        this.processingAt = null;
+        this.processingBy = null;
     }
 
     public void markRetryableFailure(String errorMessage) {
-        this.status = OutboxEventStatus.PENDING;
-        this.retryCount++;
-        this.lastError = errorMessage;
+        releaseForRetry(errorMessage);
     }
 
     public void markFailed(String errorMessage) {
         this.status = OutboxEventStatus.FAILED;
         this.retryCount++;
         this.lastError = errorMessage;
+        this.processingAt = null;
+        this.processingBy = null;
     }
 
     public void replay() {
@@ -136,5 +152,27 @@ public class OutboxEvent {
         this.retryCount = 0;
         this.lastError = null;
         this.publishedAt = null;
+        this.processingAt = null;
+        this.processingBy = null;
+    }
+
+    public void claimForProcessing(String instanceId) {
+        this.status = OutboxEventStatus.PROCESSING;
+        this.processingAt = LocalDateTime.now();
+        this.processingBy = instanceId;
+    }
+    
+    public void releaseForRetry(String errorMessage) {
+        this.status = OutboxEventStatus.PENDING;
+        this.retryCount++;
+        this.lastError = errorMessage;
+        this.processingAt = null;
+        this.processingBy = null;
+    }
+    
+    public void recoverExpiredProcessing() {
+        this.status = OutboxEventStatus.PENDING;
+        this.processingAt = null;
+        this.processingBy = null;
     }
 }
