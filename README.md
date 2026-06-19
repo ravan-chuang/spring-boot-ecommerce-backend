@@ -36,7 +36,7 @@ This project is not only a basic CRUD system. It focuses on backend engineering 
 - Public product read APIs
 - ADMIN-only product create, update, and delete APIs
 - Authenticated USER ownership checks for cart, order, and payment APIs
-- Testcontainers-based integration tests for authentication, product authorization, user ownership, payment idempotency, and full order flow
+- Testcontainers-based integration tests for authentication, product authorization, user ownership, payment idempotency, full order flow, and Kafka retry / DLT handling
 - Kafka non-blocking retry and dead-letter topic handling for failed consumer messages
 
 ### User and Product APIs
@@ -235,6 +235,32 @@ docker exec -it spring_boot_lab_kafka \
 
 A console consumer timeout after processing is expected when no additional messages arrive.
 
+### Automated Retry / DLT Integration Test
+
+The retry and DLT workflow is also covered by an automated Testcontainers-based integration test:
+
+```text
+src/test/java/com/ravan/SpringBootLab/integration/KafkaRetryDltIntegrationTest.java
+```
+
+The test publishes an empty `order-created` message with a unique key, waits for the retry pipeline to complete, and verifies that the same message is eventually consumed from `order-created-dlt`.
+
+Verified flow:
+
+```text
+order-created
+→ retry after 1 second
+→ retry after 2 seconds
+→ retry after 4 seconds
+→ order-created-dlt
+```
+
+Run only this test:
+
+```bash
+./mvnw test -Dtest=KafkaRetryDltIntegrationTest
+```
+
 ## Redis Cache
 
 Product query results are cached in Redis to reduce database access.
@@ -344,7 +370,7 @@ Run all tests:
 Expected result:
 
 ```text
-Tests run: 16, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 17, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 ```
 
@@ -907,6 +933,7 @@ Consumed PaymentPaidEvent: paymentId=7, orderId=10, amount=89999.00, method=CRED
 - Kafka non-blocking retry topics
 - Dead-letter topic handling
 - Exponential retry backoff
+- Kafka retry / DLT integration testing
 - Consumer groups
 - Dockerized infrastructure
 - Testcontainers-based integration testing
@@ -934,6 +961,7 @@ Consumed PaymentPaidEvent: paymentId=7, orderId=10, amount=89999.00, method=CRED
 - Added Kafka retry and dead-letter topic handling
 - Added exponential retry backoff (1s → 2s → 4s)
 - Added manual DLT verification for malformed Kafka messages
+- Added Kafka retry and DLT integration test with Testcontainers
 - Updated full order flow and payment tests to use JWT ownership authorization
 
 ## Future Improvements
