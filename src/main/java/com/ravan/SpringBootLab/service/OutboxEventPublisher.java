@@ -5,6 +5,7 @@ import com.ravan.SpringBootLab.model.OutboxEventStatus;
 import com.ravan.SpringBootLab.repository.OutboxEventRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,13 +26,16 @@ public class OutboxEventPublisher {
 
     private final OutboxEventRepository outboxEventRepository;
     private final EventProducer eventProducer;
+    private final int maxAttempts;
 
     public OutboxEventPublisher(
             OutboxEventRepository outboxEventRepository,
-            EventProducer eventProducer
+            EventProducer eventProducer,
+            @Value("${outbox.publisher.max-attempts:10}") int maxAttempts
     ) {
         this.outboxEventRepository = outboxEventRepository;
         this.eventProducer = eventProducer;
+        this.maxAttempts = maxAttempts;
     }
 
     @Scheduled(
@@ -63,15 +67,29 @@ public class OutboxEventPublisher {
                         event.getTopic()
                 );
             } catch (RuntimeException exception) {
-                event.markRetryableFailure(exception.getMessage());
-                outboxEventRepository.save(event);
+                String errorMessage = exception.getMessage();
 
-                logger.warn(
-                        "Outbox publish failed; will retry: id={}, retryCount={}, error={}",
-                        event.getId(),
-                        event.getRetryCount(),
-                        exception.getMessage()
-                );
+                if (event.getRetryCount() + 1 >= maxAttempts) {
+                    event.markFailed(errorMessage);
+                    outboxEventRepository.save(event);
+
+                    logger.error(
+                            "Outbox event marked FAILED after max attempts: id={}, retryCount={}, error={}",
+                            event.getId(),
+                            event.getRetryCount(),
+                            errorMessage
+                    );
+                } else {
+                    event.markRetryableFailure(errorMessage);
+                    outboxEventRepository.save(event);
+
+                    logger.warn(
+                            "Outbox publish failed; will retry: id={}, retryCount={}, error={}",
+                            event.getId(),
+                            event.getRetryCount(),
+                            errorMessage
+                    );
+                }
             }
         }
     }

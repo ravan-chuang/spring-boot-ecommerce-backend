@@ -18,14 +18,15 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 @SpringBootTest(properties = {
         "outbox.publisher.enabled=true",
         "outbox.publisher.initial-delay-ms=60000",
         "outbox.publisher.fixed-delay-ms=60000",
+        "outbox.publisher.max-attempts=3",
         "spring.kafka.listener.auto-startup=false"
 })
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
@@ -51,15 +52,7 @@ class OutboxEventPublisherRetryIntegrationTest
         String eventKey = "outbox-retry-test-" + UUID.randomUUID();
         String payload = "{\"event\":\"outbox-retry-test\"}";
 
-        OutboxEvent savedEvent = outboxEventRepository.saveAndFlush(
-                new OutboxEvent(
-                        "ORDER",
-                        eventKey,
-                        "ORDER_CREATED",
-                        KafkaTopicConfig.ORDER_CREATED_TOPIC,
-                        payload
-                )
-        );
+        OutboxEvent savedEvent = savePendingOrderEvent(eventKey, payload);
 
         doThrow(new RuntimeException("Kafka broker unavailable"))
                 .when(eventProducer)
@@ -84,6 +77,52 @@ class OutboxEventPublisherRetryIntegrationTest
                 KafkaTopicConfig.ORDER_CREATED_TOPIC,
                 eventKey,
                 payload
+        );
+    }
+
+    @Test
+    void shouldMarkEventFailedAfterMaximumPublishAttempts() {
+        String eventKey = "outbox-max-retry-test-" + UUID.randomUUID();
+        String payload = "{\"event\":\"outbox-max-retry-test\"}";
+
+        OutboxEvent savedEvent = savePendingOrderEvent(eventKey, payload);
+
+        doThrow(new RuntimeException("Kafka broker unavailable"))
+                .when(eventProducer)
+                .send(
+                        KafkaTopicConfig.ORDER_CREATED_TOPIC,
+                        eventKey,
+                        payload
+                );
+
+        outboxEventPublisher.publishPendingEvents();
+        outboxEventPublisher.publishPendingEvents();
+        outboxEventPublisher.publishPendingEvents();
+
+        OutboxEvent failedEvent = outboxEventRepository
+                .findById(savedEvent.getId())
+                .orElseThrow();
+
+        assertEquals(OutboxEventStatus.FAILED, failedEvent.getStatus());
+        assertEquals(3, failedEvent.getRetryCount());
+        assertEquals("Kafka broker unavailable", failedEvent.getLastError());
+
+        verify(eventProducer, times(3)).send(
+                KafkaTopicConfig.ORDER_CREATED_TOPIC,
+                eventKey,
+                payload
+        );
+    }
+
+    private OutboxEvent savePendingOrderEvent(String eventKey, String payload) {
+        return outboxEventRepository.saveAndFlush(
+                new OutboxEvent(
+                        "ORDER",
+                        eventKey,
+                        "ORDER_CREATED",
+                        KafkaTopicConfig.ORDER_CREATED_TOPIC,
+                        payload
+                )
         );
     }
 }

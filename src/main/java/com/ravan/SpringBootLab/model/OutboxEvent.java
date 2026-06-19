@@ -124,4 +124,16 @@ public class OutboxEvent {
         this.retryCount++;
         this.lastError = errorMessage;
     }
+
+    public void markFailed(String errorMessage) {
+        this.status = OutboxEventStatus.FAILED;
+        this.retryCount++;
+        this.lastError = errorMessage;
+    }
+
+    public void replay() {
+        this.status = OutboxEventStatus.PENDING;
+        this.retryCount = 0;
+        this.lastError = null;
+    }
 }
