@@ -32,11 +32,13 @@ public class OutboxEventPublisher {
     private final int batchSize;
     private final long processingLeaseSeconds;
     private final String instanceId;
+    private final OutboxMetrics outboxMetrics;
 
     public OutboxEventPublisher(
             OutboxEventRepository outboxEventRepository,
             OutboxEventClaimService outboxEventClaimService,
             EventProducer eventProducer,
+            OutboxMetrics outboxMetrics,
             @Value("${outbox.publisher.max-attempts:10}") int maxAttempts,
             @Value("${outbox.publisher.batch-size:50}") int batchSize,
             @Value("${outbox.publisher.processing-lease-seconds:60}") long processingLeaseSeconds
@@ -44,6 +46,7 @@ public class OutboxEventPublisher {
         this.outboxEventRepository = outboxEventRepository;
         this.outboxEventClaimService = outboxEventClaimService;
         this.eventProducer = eventProducer;
+        this.outboxMetrics = outboxMetrics;
         this.maxAttempts = maxAttempts;
         this.batchSize = batchSize;
         this.processingLeaseSeconds = processingLeaseSeconds;
@@ -63,6 +66,8 @@ public class OutboxEventPublisher {
                         instanceId
                 );
 
+        outboxMetrics.recordClaimedEvents(claimedEventIds.size());
+
         for (UUID eventId : claimedEventIds) {
             publishClaimedEvent(eventId);
         }
@@ -74,6 +79,8 @@ public class OutboxEventPublisher {
 
         int recoveredCount = outboxEventClaimService
                 .recoverExpiredProcessingEvents(expiredBefore);
+
+        outboxMetrics.recordRecoveredProcessingEvents(recoveredCount);
 
         if (recoveredCount > 0) {
             logger.warn(
@@ -106,6 +113,8 @@ public class OutboxEventPublisher {
             event.markPublished();
             outboxEventRepository.save(event);
 
+            outboxMetrics.recordPublishSuccess();
+
             logger.info(
                     "Published claimed outbox event: id={}, eventType={}, topic={}, instanceId={}",
                     event.getId(),
@@ -115,6 +124,7 @@ public class OutboxEventPublisher {
             );
         } catch (RuntimeException exception) {
             String errorMessage = exception.getMessage();
+            outboxMetrics.recordPublishFailure();
 
             if (event.getRetryCount() + 1 >= maxAttempts) {
                 event.markFailed(errorMessage);
