@@ -1,5 +1,6 @@
 package com.ravan.SpringBootLab.service;
 
+import com.ravan.SpringBootLab.config.KafkaTopicConfig;
 import com.ravan.SpringBootLab.event.PaymentPaidEvent;
 import com.ravan.SpringBootLab.dto.CreatePaymentRequest;
 import com.ravan.SpringBootLab.dto.PaymentResponse;
@@ -26,18 +27,18 @@ public class PaymentService {
     private final PaymentRepository paymentRepository;
     private final OrderRepository orderRepository;
     private final IdempotencyRecordRepository idempotencyRecordRepository;
-    private final EventProducer eventProducer;
+    private final OutboxEventService outboxEventService;
 
     public PaymentService(
             PaymentRepository paymentRepository,
             OrderRepository orderRepository,
             IdempotencyRecordRepository idempotencyRecordRepository,
-            EventProducer eventProducer
+            OutboxEventService outboxEventService
     ) {
         this.paymentRepository = paymentRepository;
         this.orderRepository = orderRepository;
         this.idempotencyRecordRepository = idempotencyRecordRepository;
-        this.eventProducer = eventProducer;
+        this.outboxEventService = outboxEventService;
     }
 
     @Transactional
@@ -103,14 +104,18 @@ public class PaymentService {
         order.setUpdatedAt(LocalDateTime.now());
         orderRepository.save(order);
 
-        eventProducer.sendPaymentPaidEvent(
-            new PaymentPaidEvent(
-                savedPayment.getId(),
-                order.getId(),
-                savedPayment.getAmount(),
-                savedPayment.getMethod().name(),
-                savedPayment.getPaidAt()
-            )
+        outboxEventService.saveEvent(
+                "PAYMENT",
+                String.valueOf(savedPayment.getId()),
+                "PAYMENT_PAID",
+                KafkaTopicConfig.PAYMENT_PAID_TOPIC,
+                new PaymentPaidEvent(
+                        savedPayment.getId(),
+                        order.getId(),
+                        savedPayment.getAmount(),
+                        savedPayment.getMethod().name(),
+                        savedPayment.getPaidAt()
+                )
         );
 
         return toPaymentResponse(savedPayment);

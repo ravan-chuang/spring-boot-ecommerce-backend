@@ -119,8 +119,8 @@ public class OutboxEvent {
         this.lastError = null;
     }
 
-    public void markFailed(String errorMessage) {
-        this.status = OutboxEventStatus.FAILED;
+    public void markRetryableFailure(String errorMessage) {
+        this.status = OutboxEventStatus.PENDING;
         this.retryCount++;
         this.lastError = errorMessage;
     }

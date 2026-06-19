@@ -1,5 +1,6 @@
 package com.ravan.SpringBootLab.service;
 
+import com.ravan.SpringBootLab.config.KafkaTopicConfig;
 import com.ravan.SpringBootLab.event.OrderCreatedEvent;
 import com.ravan.SpringBootLab.dto.OrderItemResponse;
 import com.ravan.SpringBootLab.dto.OrderResponse;
@@ -37,7 +38,7 @@ public class OrderService {
     private final CartItemRepository cartItemRepository;
     private final UserRepository userRepository;
     private final ProductRepository productRepository;
-    private final EventProducer eventProducer;
+    private final OutboxEventService outboxEventService;
 
     public OrderService(
             OrderRepository orderRepository,
@@ -45,14 +46,14 @@ public class OrderService {
             CartItemRepository cartItemRepository,
             UserRepository userRepository,
             ProductRepository productRepository,
-            EventProducer eventProducer
+            OutboxEventService outboxEventService
     ) {
         this.orderRepository = orderRepository;
         this.orderItemRepository = orderItemRepository;
         this.cartItemRepository = cartItemRepository;
         this.userRepository = userRepository;
         this.productRepository = productRepository;
-        this.eventProducer = eventProducer;
+        this.outboxEventService = outboxEventService;
     }
 
     @Transactional
@@ -111,7 +112,11 @@ public class OrderService {
 
         cartItemRepository.deleteAll(cartItems);
 
-        eventProducer.sendOrderCreatedEvent(
+        outboxEventService.saveEvent(
+                "ORDER",
+                String.valueOf(savedOrder.getId()),
+                "ORDER_CREATED",
+                KafkaTopicConfig.ORDER_CREATED_TOPIC,
                 new OrderCreatedEvent(
                         savedOrder.getId(),
                         user.getId(),
@@ -185,6 +190,19 @@ public class OrderService {
         }
         
         cartItemRepository.deleteAll(cartItems);
+
+        outboxEventService.saveEvent(
+                "ORDER",
+                String.valueOf(savedOrder.getId()),
+                "ORDER_CREATED",
+                KafkaTopicConfig.ORDER_CREATED_TOPIC,
+                new OrderCreatedEvent(
+                        savedOrder.getId(),
+                        user.getId(),
+                        savedOrder.getTotalAmount(),
+                        savedOrder.getCreatedAt()
+                )
+        );
         
         return getOrderById(savedOrder.getId());
     }

@@ -29,68 +29,52 @@ public class EventProducer {
         this.objectMapper = objectMapper;
     }
 
-    public void sendOrderCreatedEvent(OrderCreatedEvent event) {
+    public void send(String topic, String key, String payload) {
         try {
-            String message = objectMapper.writeValueAsString(event);
-
             SendResult<String, String> result = kafkaTemplate.send(
-                    KafkaTopicConfig.ORDER_CREATED_TOPIC,
-                    String.valueOf(event.getOrderId()),
-                    message
+                    topic,
+                    key,
+                    payload
             ).get();
 
             kafkaTemplate.flush();
 
             logger.info(
-                    "Sent OrderCreatedEvent: orderId={}, topic={}, partition={}, offset={}",
-                    event.getOrderId(),
+                    "Sent outbox event: topic={}, key={}, partition={}, offset={}",
                     result.getRecordMetadata().topic(),
+                    key,
                     result.getRecordMetadata().partition(),
                     result.getRecordMetadata().offset()
             );
-        } catch (JsonProcessingException e) {
-            logger.error("Failed to serialize OrderCreatedEvent: orderId={}", event.getOrderId(), e);
-            throw new RuntimeException("Failed to serialize OrderCreatedEvent", e);
-        } catch (InterruptedException e) {
+        } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
-            logger.error("Interrupted while sending OrderCreatedEvent: orderId={}", event.getOrderId(), e);
-            throw new RuntimeException("Interrupted while sending OrderCreatedEvent", e);
-        } catch (ExecutionException e) {
-            logger.error("Failed to send OrderCreatedEvent to Kafka: orderId={}", event.getOrderId(), e);
-            throw new RuntimeException("Failed to send OrderCreatedEvent to Kafka", e);
+            throw new RuntimeException("Interrupted while sending Kafka event", exception);
+        } catch (ExecutionException exception) {
+            throw new RuntimeException("Failed to send Kafka event", exception);
+        }
+    }
+
+    public void sendOrderCreatedEvent(OrderCreatedEvent event) {
+        try {
+            send(
+                    KafkaTopicConfig.ORDER_CREATED_TOPIC,
+                    String.valueOf(event.getOrderId()),
+                    objectMapper.writeValueAsString(event)
+            );
+        } catch (JsonProcessingException exception) {
+            throw new RuntimeException("Failed to serialize OrderCreatedEvent", exception);
         }
     }
 
     public void sendPaymentPaidEvent(PaymentPaidEvent event) {
         try {
-            String message = objectMapper.writeValueAsString(event);
-
-            SendResult<String, String> result = kafkaTemplate.send(
+            send(
                     KafkaTopicConfig.PAYMENT_PAID_TOPIC,
                     String.valueOf(event.getPaymentId()),
-                    message
-            ).get();
-
-            kafkaTemplate.flush();
-
-            logger.info(
-                    "Sent PaymentPaidEvent: paymentId={}, orderId={}, topic={}, partition={}, offset={}",
-                    event.getPaymentId(),
-                    event.getOrderId(),
-                    result.getRecordMetadata().topic(),
-                    result.getRecordMetadata().partition(),
-                    result.getRecordMetadata().offset()
+                    objectMapper.writeValueAsString(event)
             );
-        } catch (JsonProcessingException e) {
-            logger.error("Failed to serialize PaymentPaidEvent: paymentId={}", event.getPaymentId(), e);
-            throw new RuntimeException("Failed to serialize PaymentPaidEvent", e);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            logger.error("Interrupted while sending PaymentPaidEvent: paymentId={}", event.getPaymentId(), e);
-            throw new RuntimeException("Interrupted while sending PaymentPaidEvent", e);
-        } catch (ExecutionException e) {
-            logger.error("Failed to send PaymentPaidEvent to Kafka: paymentId={}", event.getPaymentId(), e);
-            throw new RuntimeException("Failed to send PaymentPaidEvent to Kafka", e);
+        } catch (JsonProcessingException exception) {
+            throw new RuntimeException("Failed to serialize PaymentPaidEvent", exception);
         }
     }
 }
