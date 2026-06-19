@@ -2,9 +2,9 @@
 
 [![CI](https://github.com/ravan-chuang/spring-boot-ecommerce-backend/actions/workflows/ci.yml/badge.svg)](https://github.com/ravan-chuang/spring-boot-ecommerce-backend/actions/workflows/ci.yml)
 
-A production-oriented e-commerce backend built with Spring Boot, PostgreSQL, Redis, Kafka, JWT authentication, role-based authorization, user ownership checks, Flyway database migrations, Testcontainers-based integration tests, and Spring Boot Actuator health checks.
+A production-oriented e-commerce backend built with Spring Boot, PostgreSQL, Redis, Kafka, JWT authentication, role-based authorization, user ownership checks, Flyway database migrations, Testcontainers-based integration tests, Kafka retry and dead-letter topic handling, and Spring Boot Actuator health checks.
 
-This project is not only a basic CRUD system. It focuses on backend engineering concepts such as transactional order processing, optimistic locking, payment idempotency, Redis caching, Kafka-based event-driven architecture, JWT authentication, ADMIN/USER authorization, user ownership checks, Flyway-managed schema versioning, self-contained integration testing with Testcontainers, and service health monitoring.
+This project is not only a basic CRUD system. It focuses on backend engineering concepts such as transactional order processing, optimistic locking, payment idempotency, Redis caching, Kafka-based event-driven architecture, JWT authentication, ADMIN/USER authorization, user ownership checks, Flyway-managed schema versioning, self-contained integration testing with Testcontainers, Kafka retry and dead-letter topic handling, and service health monitoring.
 
 ## Tech Stack
 
@@ -16,9 +16,9 @@ This project is not only a basic CRUD system. It focuses on backend engineering 
 - Spring Data JPA
 - Hibernate
 - PostgreSQL
-- Flyway
 - Redis
 - Apache Kafka
+- Spring Retry
 - Docker Compose
 - Testcontainers
 - Swagger / OpenAPI
@@ -37,6 +37,7 @@ This project is not only a basic CRUD system. It focuses on backend engineering 
 - ADMIN-only product create, update, and delete APIs
 - Authenticated USER ownership checks for cart, order, and payment APIs
 - Testcontainers-based integration tests for authentication, product authorization, user ownership, payment idempotency, and full order flow
+- Kafka non-blocking retry and dead-letter topic handling for failed consumer messages
 
 ### User and Product APIs
 
@@ -71,15 +72,12 @@ This project is not only a basic CRUD system. It focuses on backend engineering 
 - Prevent duplicate payment with `Idempotency-Key`
 - Require authenticated users to pay only their own orders
 
-
-
 ### Database Migration
 
 - Manage PostgreSQL schema with Flyway migrations
 - Initialize database schema with `V1__init_schema.sql`
 - Replace Hibernate auto schema updates with schema validation
 - Keep database structure version-controlled and reproducible
-
 
 ## Authentication and Authorization
 
@@ -167,6 +165,76 @@ sequenceDiagram
     Consumer->>Consumer: Process PaymentPaidEvent
 ```
 
+## Kafka Retry and Dead-Letter Topics
+
+Kafka consumers use non-blocking retry topics to prevent malformed or temporarily unprocessable messages from blocking the main consumer flow.
+
+Retry policy:
+
+```text
+Initial processing failure
+→ retry after 1 second
+→ retry after 2 seconds
+→ retry after 4 seconds
+→ dead-letter topic (DLT)
+```
+
+Implemented retry behavior:
+
+- Retry topics are generated automatically from the original topic.
+- Failed `order-created` and `payment-paid` messages are retried with exponential backoff.
+- Messages that still fail after all retry attempts are forwarded to a dead-letter topic.
+- The DLT handler logs the failed message topic, partition, offset, key, and payload for later investigation.
+
+Main retry configuration:
+
+```text
+src/main/java/com/ravan/SpringBootLab/config/KafkaRetryConfig.java
+```
+
+Consumer retry and DLT handling:
+
+```text
+src/main/java/com/ravan/SpringBootLab/service/EventConsumer.java
+```
+
+Example DLT log:
+
+```text
+Message moved to DLT: topic=order-created-dlt, partition=0, offset=0, key=null, value=
+```
+
+### Manual DLT Verification
+
+Start the local infrastructure and Spring Boot application:
+
+```bash
+docker compose up -d postgres redis kafka
+./mvnw spring-boot:run
+```
+
+In another terminal, publish an empty message to trigger the retry flow:
+
+```bash
+printf '\n' | docker exec -i spring_boot_lab_kafka \
+  /opt/kafka/bin/kafka-console-producer.sh \
+  --bootstrap-server localhost:9092 \
+  --topic order-created
+```
+
+Then inspect the DLT topic:
+
+```bash
+docker exec -it spring_boot_lab_kafka \
+  /opt/kafka/bin/kafka-console-consumer.sh \
+  --bootstrap-server localhost:9092 \
+  --topic order-created-dlt \
+  --from-beginning \
+  --timeout-ms 5000
+```
+
+A console consumer timeout after processing is expected when no additional messages arrive.
+
 ## Redis Cache
 
 Product query results are cached in Redis to reduce database access.
@@ -196,7 +264,6 @@ If the same key is used again, the system returns the existing payment result in
 Product stock updates use optimistic locking to prevent overselling under concurrent order creation.
 
 The product table includes a `version` column managed by JPA `@Version`.
-
 
 ## Flyway Database Migration
 
@@ -287,6 +354,11 @@ For Docker Desktop on macOS, this project includes a test resource file to ensur
 src/test/resources/docker-java.properties
 ```
 
+It pins a compatible Docker Java API version for the local Docker Desktop environment:
+
+```properties
+api.version=1.44
+```
 
 ## System Architecture
 
@@ -305,6 +377,10 @@ flowchart TD
 
     OrderTopic --> OrderConsumer[OrderCreatedEvent Consumer]
     PaymentTopic --> PaymentConsumer[PaymentPaidEvent Consumer]
+
+    OrderConsumer --> RetryTopic[Retry Topics]
+    PaymentConsumer --> RetryTopic
+    RetryTopic --> DLT[Dead-Letter Topics]
 ```
 
 ## Observability and Health Checks
@@ -321,7 +397,6 @@ Available endpoints:
 The health endpoint reports the status of important runtime components such as:
 
 - PostgreSQL
-- Flyway
 - Redis
 - Disk space
 - Liveness state
@@ -359,7 +434,6 @@ Example response:
 }
 ```
 
-
 ## Docker Services
 
 This project uses Docker Compose to run infrastructure services.
@@ -368,7 +442,6 @@ Services:
 
 - Spring Boot application
 - PostgreSQL
-- Flyway
 - Redis
 - Kafka
 
@@ -392,7 +465,6 @@ This includes:
 
 - Spring Boot application
 - PostgreSQL
-- Flyway
 - Redis
 - Kafka
 
@@ -470,7 +542,6 @@ If Docker Desktop on macOS cannot be detected automatically, set the Docker sock
 ```bash
 export DOCKER_HOST=unix://$HOME/.docker/run/docker.sock
 ```
-
 
 ## API Demo Flow
 
@@ -770,7 +841,6 @@ Expected result:
 403 Forbidden
 ```
 
-
 ## Kafka Verification
 
 Check Kafka topic offsets:
@@ -834,6 +904,9 @@ Consumed PaymentPaidEvent: paymentId=7, orderId=10, amount=89999.00, method=CRED
 - Payment idempotency
 - Redis caching
 - Kafka event-driven architecture
+- Kafka non-blocking retry topics
+- Dead-letter topic handling
+- Exponential retry backoff
 - Consumer groups
 - Dockerized infrastructure
 - Testcontainers-based integration testing
@@ -858,13 +931,15 @@ Consumed PaymentPaidEvent: paymentId=7, orderId=10, amount=89999.00, method=CRED
 - Added Flyway database migration with schema validation
 - Added Testcontainers-based integration test infrastructure
 - Added self-contained integration tests for PostgreSQL, Redis, and Kafka
+- Added Kafka retry and dead-letter topic handling
+- Added exponential retry backoff (1s → 2s → 4s)
+- Added manual DLT verification for malformed Kafka messages
 - Updated full order flow and payment tests to use JWT ownership authorization
 
 ## Future Improvements
 
 - Add refresh token and token revocation support
 - Add more unit tests and integration tests
-- Add Kafka retry and dead-letter queue
 - Add deployment environment
 - Add performance testing
 - Add monitoring with Prometheus and Grafana
