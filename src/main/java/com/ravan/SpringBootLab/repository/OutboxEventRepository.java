@@ -18,4 +18,8 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID> 
             String aggregateId,
             String eventType
     );
+
+    List<OutboxEvent> findByStatusOrderByCreatedAtAsc(
+            OutboxEventStatus status
+    );
 }

@@ -135,5 +135,6 @@ public class OutboxEvent {
         this.status = OutboxEventStatus.PENDING;
         this.retryCount = 0;
         this.lastError = null;
+        this.publishedAt = null;
     }
 }
