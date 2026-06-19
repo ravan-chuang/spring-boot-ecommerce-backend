@@ -1,9 +1,13 @@
 package com.ravan.SpringBootLab.controller;
 
 import com.ravan.SpringBootLab.TestcontainersIntegrationTest;
+import com.ravan.SpringBootLab.config.KafkaTopicConfig;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ravan.SpringBootLab.model.OutboxEvent;
+import com.ravan.SpringBootLab.model.OutboxEventStatus;
 import com.ravan.SpringBootLab.model.User;
+import com.ravan.SpringBootLab.repository.OutboxEventRepository;
 import com.ravan.SpringBootLab.repository.UserRepository;
 import com.ravan.SpringBootLab.security.JwtService;
 import com.ravan.SpringBootLab.service.EventProducer;
@@ -16,8 +20,12 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.util.List;
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -38,6 +46,9 @@ class OrderFlowIntegrationTest extends TestcontainersIntegrationTest {
     private UserRepository userRepository;
 
     @Autowired
+    private OutboxEventRepository outboxEventRepository;
+
+    @Autowired
     private PasswordEncoder passwordEncoder;
 
     @Autowired
@@ -45,6 +56,40 @@ class OrderFlowIntegrationTest extends TestcontainersIntegrationTest {
 
     @MockitoBean
     private EventProducer eventProducer;
+
+    @Test
+    void shouldPersistPendingOrderCreatedOutboxEventWhenCreatingOrder() throws Exception {
+        TestUser testUser = createTestUser("USER");
+        Integer productId = createProduct();
+
+        addProductToCart(testUser.userId(), testUser.token(), productId);
+
+        Integer orderId = createOrder(testUser.userId(), testUser.token());
+
+        List<OutboxEvent> events =
+                outboxEventRepository.findByAggregateTypeAndAggregateIdAndEventType(
+                        "ORDER",
+                        String.valueOf(orderId),
+                        "ORDER_CREATED"
+                );
+
+        assertEquals(1, events.size());
+
+        OutboxEvent event = events.getFirst();
+
+        assertEquals(OutboxEventStatus.PENDING, event.getStatus());
+        assertEquals(KafkaTopicConfig.ORDER_CREATED_TOPIC, event.getTopic());
+        assertEquals("ORDER", event.getAggregateType());
+        assertEquals(String.valueOf(orderId), event.getAggregateId());
+        assertEquals("ORDER_CREATED", event.getEventType());
+        assertNotNull(event.getCreatedAt());
+
+        assertTrue(event.getPayload().contains("\"orderId\":" + orderId));
+        assertEquals(
+                orderId.intValue(),
+                objectMapper.readTree(event.getPayload()).get("orderId").asInt()
+        );
+    }
 
     @Test
     void shouldCreateOrderFromCartAndPaySuccessfully() throws Exception {
