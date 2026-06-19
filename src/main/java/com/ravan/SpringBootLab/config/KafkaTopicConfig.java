@@ -9,6 +9,8 @@ public class KafkaTopicConfig {
 
     public static final String ORDER_CREATED_TOPIC = "order-created";
     public static final String PAYMENT_PAID_TOPIC = "payment-paid";
+    public static final String ORDER_CREATED_DLT_TOPIC = "order-created-dlt";
+    public static final String PAYMENT_PAID_DLT_TOPIC = "payment-paid-dlt";
 
     @Bean
     public NewTopic orderCreatedTopic() {
