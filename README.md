@@ -2,9 +2,9 @@
 
 [![CI](https://github.com/ravan-chuang/spring-boot-ecommerce-backend/actions/workflows/ci.yml/badge.svg)](https://github.com/ravan-chuang/spring-boot-ecommerce-backend/actions/workflows/ci.yml)
 
-A production-oriented e-commerce backend built with Spring Boot, PostgreSQL, Redis, Kafka, JWT authentication, role-based authorization, user ownership checks, Flyway database migrations, Testcontainers-based integration tests, Kafka retry and dead-letter topic handling, and Spring Boot Actuator health checks.
+A production-oriented e-commerce backend built with Spring Boot, PostgreSQL, Redis, Kafka, JWT authentication, role-based authorization, user ownership checks, Flyway database migrations, Testcontainers-based integration tests, Kafka retry and dead-letter topic handling, transactional outbox failure governance and replay, and Spring Boot Actuator health checks.
 
-This project is not only a basic CRUD system. It focuses on backend engineering concepts such as transactional order processing, optimistic locking, payment idempotency, Redis caching, Kafka-based event-driven architecture, JWT authentication, ADMIN/USER authorization, user ownership checks, Flyway-managed schema versioning, self-contained integration testing with Testcontainers, Kafka retry and dead-letter topic handling, and service health monitoring.
+This project is not only a basic CRUD system. It focuses on backend engineering concepts such as transactional order processing, optimistic locking, payment idempotency, Redis caching, Kafka-based event-driven architecture, JWT authentication, ADMIN/USER authorization, user ownership checks, Flyway-managed schema versioning, self-contained integration testing with Testcontainers, Kafka retry and dead-letter topic handling, transactional outbox event publishing, failed-event replay, and service health monitoring.
 
 ## Tech Stack
 
@@ -38,6 +38,7 @@ This project is not only a basic CRUD system. It focuses on backend engineering 
 - Authenticated USER ownership checks for cart, order, and payment APIs
 - Testcontainers-based integration tests for authentication, product authorization, user ownership, payment idempotency, full order flow, and Kafka retry / DLT handling
 - Kafka non-blocking retry and dead-letter topic handling for failed consumer messages
+- Transactional Outbox for reliable order and payment event publication
 
 ### User and Product APIs
 
@@ -120,13 +121,15 @@ POST   /api/auth/register             Public
 POST   /api/auth/login                Public
 GET    /actuator/health               Public
 GET    /actuator/info                 Public
+GET    /api/admin/outbox/failed       ADMIN only
+POST   /api/admin/outbox/{eventId}/replay ADMIN only
 ```
 
 Product write APIs require the `ADMIN` role. Cart, order, and payment APIs require authentication and enforce ownership checks, so normal users can only operate on their own cart, orders, and payments. ADMIN users can pass ownership checks for management and testing scenarios.
 
 ## Kafka Event-Driven Architecture
 
-The system publishes domain events to Kafka topics when important business actions happen.
+The system records domain events in PostgreSQL within the same business transaction, then an Outbox Publisher publishes pending events to Kafka.
 
 Implemented events:
 
@@ -140,12 +143,17 @@ sequenceDiagram
     participant Client
     participant API as Spring Boot API
     participant OrderService
+    participant DB as PostgreSQL
+    participant Publisher as Outbox Publisher
     participant Kafka as Kafka Topic: order-created
     participant Consumer as Kafka Consumer
 
     Client->>API: Create Order
     API->>OrderService: createOrderFromCart()
-    OrderService->>Kafka: Publish OrderCreatedEvent
+    OrderService->>DB: Commit order data + ORDER_CREATED outbox event
+    Publisher->>DB: Read PENDING outbox event
+    Publisher->>Kafka: Publish OrderCreatedEvent
+    Publisher->>DB: Mark event PUBLISHED
     Kafka->>Consumer: Consume order-created event
     Consumer->>Consumer: Process OrderCreatedEvent
 ```
@@ -155,12 +163,17 @@ sequenceDiagram
     participant Client
     participant API as Spring Boot API
     participant PaymentService
+    participant DB as PostgreSQL
+    participant Publisher as Outbox Publisher
     participant Kafka as Kafka Topic: payment-paid
     participant Consumer as Kafka Consumer
 
     Client->>API: Pay Order
     API->>PaymentService: payOrder()
-    PaymentService->>Kafka: Publish PaymentPaidEvent
+    PaymentService->>DB: Commit payment data + PAYMENT_PAID outbox event
+    Publisher->>DB: Read PENDING outbox event
+    Publisher->>Kafka: Publish PaymentPaidEvent
+    Publisher->>DB: Mark event PUBLISHED
     Kafka->>Consumer: Consume payment-paid event
     Consumer->>Consumer: Process PaymentPaidEvent
 ```
@@ -261,6 +274,108 @@ Run only this test:
 ./mvnw test -Dtest=KafkaRetryDltIntegrationTest
 ```
 
+## Transactional Outbox and Failure Governance
+
+Order and payment data should not be committed independently from their Kafka events. This project uses the Transactional Outbox pattern to mitigate the dual-write consistency problem.
+
+Within the same PostgreSQL transaction, the application persists both business data and an outbox record:
+
+```text
+Create Order / Pay Order
+→ persist business data
+→ persist outbox_events record with status PENDING
+→ commit one database transaction
+→ background publisher sends the event to Kafka
+```
+
+Outbox records include:
+
+```text
+id
+aggregate_type
+aggregate_id
+event_type
+topic
+payload
+status
+retry_count
+created_at
+published_at
+last_error
+```
+
+Event states:
+
+```text
+PENDING   Waiting to be published or retried
+PUBLISHED Successfully published to Kafka
+FAILED    Reached the configured retry limit and requires operational action
+```
+
+### Publisher behavior
+
+```text
+PENDING
+→ Kafka publish succeeds
+→ PUBLISHED
+
+PENDING
+→ Kafka publish fails
+→ retry_count increases
+→ remains PENDING until the retry limit is reached
+
+retry limit reached
+→ FAILED
+→ automatic retry stops
+```
+
+The default retry limit is configurable:
+
+```properties
+outbox.publisher.max-attempts=10
+```
+
+### Failed-event administration
+
+ADMIN users can inspect failed events and schedule a replay.
+
+```text
+GET  /api/admin/outbox/failed
+POST /api/admin/outbox/{eventId}/replay
+```
+
+Replay behavior:
+
+```text
+FAILED
+→ PENDING
+→ retry_count reset to 0
+→ last_error cleared
+→ publisher can attempt Kafka delivery again
+```
+
+Example requests:
+
+```bash
+curl -i -X GET http://localhost:8080/api/admin/outbox/failed   -H "Authorization: Bearer $ADMIN_TOKEN"
+```
+
+```bash
+curl -i -X POST http://localhost:8080/api/admin/outbox/{eventId}/replay   -H "Authorization: Bearer $ADMIN_TOKEN"
+```
+
+### Outbox test coverage
+
+```text
+PENDING event → Kafka publish → PUBLISHED
+Kafka publish failure → PENDING + retry_count increment
+Maximum publish attempts → FAILED
+Order creation → ORDER_CREATED outbox event persisted
+Payment success → PAYMENT_PAID outbox event persisted
+ADMIN replay → FAILED event reset to PENDING
+Normal USER → rejected from ADMIN outbox APIs
+```
+
 ## Redis Cache
 
 Product query results are cached in Redis to reduce database access.
@@ -295,10 +410,11 @@ The product table includes a `version` column managed by JPA `@Version`.
 
 This project uses Flyway to manage PostgreSQL schema versions.
 
-The initial database schema is defined in:
+Database migrations include:
 
 ```text
 src/main/resources/db/migration/V1__init_schema.sql
+src/main/resources/db/migration/V2__create_outbox_events.sql
 ```
 
 Hibernate is configured to validate the schema instead of automatically updating it:
@@ -326,10 +442,11 @@ docker exec -it spring_boot_lab_postgres psql -U ravan -d spring_boot_lab \
   -c "SELECT installed_rank, version, description, success FROM flyway_schema_history;"
 ```
 
-Expected result:
+Expected result includes both schema migrations:
 
 ```text
 1 | 1 | init schema | t
+2 | 2 | create outbox events | t
 ```
 
 ## Testcontainers Integration Testing
@@ -370,7 +487,7 @@ Run all tests:
 Expected result:
 
 ```text
-Tests run: 17, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 24, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 ```
 
@@ -396,8 +513,10 @@ flowchart TD
     Repository --> PostgreSQL[(PostgreSQL)]
 
     Service --> Redis[(Redis Cache)]
-    Service --> Producer[Kafka Producer]
+    Service --> Outbox[outbox_events: PENDING / PUBLISHED / FAILED]
 
+    Outbox --> Publisher[Scheduled Outbox Publisher]
+    Publisher --> Producer[Kafka Producer]
     Producer --> OrderTopic[Kafka Topic: order-created]
     Producer --> PaymentTopic[Kafka Topic: payment-paid]
 
@@ -407,6 +526,8 @@ flowchart TD
     OrderConsumer --> RetryTopic[Retry Topics]
     PaymentConsumer --> RetryTopic
     RetryTopic --> DLT[Dead-Letter Topics]
+
+    Admin[ADMIN Outbox API] --> Outbox
 ```
 
 ## Observability and Health Checks
@@ -792,7 +913,7 @@ After this step:
 
 - The order is created with status `PENDING`
 - Product stock is deducted
-- An `order-created` event is published to Kafka
+- An `ORDER_CREATED` outbox event is persisted and later published to Kafka by the Outbox Publisher
 
 Save the returned order id.
 
@@ -826,7 +947,7 @@ After this step:
 
 - The payment is created
 - The order status becomes `PAID`
-- A `payment-paid` event is published to Kafka
+- A `PAYMENT_PAID` outbox event is persisted and later published to Kafka by the Outbox Publisher
 
 ### 10. Verify payment idempotency
 
@@ -930,6 +1051,10 @@ Consumed PaymentPaidEvent: paymentId=7, orderId=10, amount=89999.00, method=CRED
 - Payment idempotency
 - Redis caching
 - Kafka event-driven architecture
+- Transactional Outbox pattern
+- Dual-write consistency mitigation
+- Outbox retry limit and failed-event governance
+- Operational replay for failed events
 - Kafka non-blocking retry topics
 - Dead-letter topic handling
 - Exponential retry backoff
@@ -962,6 +1087,13 @@ Consumed PaymentPaidEvent: paymentId=7, orderId=10, amount=89999.00, method=CRED
 - Added exponential retry backoff (1s → 2s → 4s)
 - Added manual DLT verification for malformed Kafka messages
 - Added Kafka retry and DLT integration test with Testcontainers
+- Added Transactional Outbox for order and payment events
+- Added scheduled outbox publisher with PENDING and PUBLISHED states
+- Added outbox retry counting, retry limit, and FAILED state handling
+- Added Outbox Publisher integration tests for successful and failed Kafka delivery
+- Added order and payment outbox persistence tests
+- Added ADMIN APIs to inspect FAILED events and replay them
+- Added ADMIN outbox authorization and replay integration tests
 - Updated full order flow and payment tests to use JWT ownership authorization
 
 ## Future Improvements
