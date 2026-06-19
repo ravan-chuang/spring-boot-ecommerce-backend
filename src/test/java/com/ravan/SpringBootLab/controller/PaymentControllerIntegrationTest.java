@@ -1,9 +1,13 @@
 package com.ravan.SpringBootLab.controller;
 
 import com.ravan.SpringBootLab.TestcontainersIntegrationTest;
+import com.ravan.SpringBootLab.config.KafkaTopicConfig;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ravan.SpringBootLab.model.OutboxEvent;
+import com.ravan.SpringBootLab.model.OutboxEventStatus;
 import com.ravan.SpringBootLab.model.User;
+import com.ravan.SpringBootLab.repository.OutboxEventRepository;
 import com.ravan.SpringBootLab.repository.UserRepository;
 import com.ravan.SpringBootLab.security.JwtService;
 import com.ravan.SpringBootLab.service.EventProducer;
@@ -16,10 +20,13 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.util.List;
 import java.util.UUID;
 
 import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -40,6 +47,9 @@ class PaymentControllerIntegrationTest extends TestcontainersIntegrationTest {
     private UserRepository userRepository;
 
     @Autowired
+    private OutboxEventRepository outboxEventRepository;
+
+    @Autowired
     private PasswordEncoder passwordEncoder;
 
     @Autowired
@@ -47,6 +57,57 @@ class PaymentControllerIntegrationTest extends TestcontainersIntegrationTest {
 
     @MockitoBean
     private EventProducer eventProducer;
+
+    @Test
+    void shouldPersistPendingPaymentPaidOutboxEventWhenPaymentSucceeds() throws Exception {
+        TestUser testUser = createTestUser("USER");
+        Integer productId = createProductAndReturnId();
+
+        addProductToCart(testUser.userId(), testUser.token(), productId);
+
+        Integer orderId = createOrderAndReturnId(
+                testUser.userId(),
+                testUser.token()
+        );
+
+        Integer paymentId = payOrderAndReturnPaymentId(
+                orderId,
+                testUser.token(),
+                "payment-outbox-" + UUID.randomUUID()
+        );
+
+        List<OutboxEvent> events =
+                outboxEventRepository.findByAggregateTypeAndAggregateIdAndEventType(
+                        "PAYMENT",
+                        String.valueOf(paymentId),
+                        "PAYMENT_PAID"
+                );
+
+        assertEquals(1, events.size());
+
+        OutboxEvent event = events.getFirst();
+
+        assertEquals(OutboxEventStatus.PENDING, event.getStatus());
+        assertEquals(KafkaTopicConfig.PAYMENT_PAID_TOPIC, event.getTopic());
+        assertEquals("PAYMENT", event.getAggregateType());
+        assertEquals(String.valueOf(paymentId), event.getAggregateId());
+        assertEquals("PAYMENT_PAID", event.getEventType());
+        assertNotNull(event.getCreatedAt());
+
+        assertTrue(event.getPayload().contains("\"paymentId\":" + paymentId));
+        assertEquals(
+                paymentId.intValue(),
+                objectMapper.readTree(event.getPayload())
+                        .get("paymentId")
+                        .asInt()
+        );
+        assertEquals(
+                orderId.intValue(),
+                objectMapper.readTree(event.getPayload())
+                        .get("orderId")
+                        .asInt()
+        );
+    }
 
     @Test
     void shouldReturnSamePaymentWhenUsingSameIdempotencyKey() throws Exception {
