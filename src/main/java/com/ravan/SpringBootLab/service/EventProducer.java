@@ -5,16 +5,21 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ravan.SpringBootLab.config.KafkaTopicConfig;
 import com.ravan.SpringBootLab.event.OrderCreatedEvent;
 import com.ravan.SpringBootLab.event.PaymentPaidEvent;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
+import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 
 @Service
 public class EventProducer {
+
+    public static final String OUTBOX_EVENT_ID_HEADER = "outbox-event-id";
 
     private static final Logger logger = LoggerFactory.getLogger(EventProducer.class);
 
@@ -30,17 +35,34 @@ public class EventProducer {
     }
 
     public void send(String topic, String key, String payload) {
+        send(topic, key, payload, null);
+    }
+
+    public void send(
+            String topic,
+            String key,
+            String payload,
+            UUID outboxEventId
+    ) {
         try {
-            SendResult<String, String> result = kafkaTemplate.send(
-                    topic,
-                    key,
-                    payload
-            ).get();
+            ProducerRecord<String, String> record =
+                    new ProducerRecord<>(topic, key, payload);
+
+            if (outboxEventId != null) {
+                record.headers().add(
+                        OUTBOX_EVENT_ID_HEADER,
+                        outboxEventId.toString()
+                                .getBytes(StandardCharsets.UTF_8)
+                );
+            }
+
+            SendResult<String, String> result = kafkaTemplate.send(record).get();
 
             kafkaTemplate.flush();
 
             logger.info(
-                    "Sent outbox event: topic={}, key={}, partition={}, offset={}",
+                    "Sent outbox event: eventId={}, topic={}, key={}, partition={}, offset={}",
+                    outboxEventId,
                     result.getRecordMetadata().topic(),
                     key,
                     result.getRecordMetadata().partition(),
@@ -48,9 +70,15 @@ public class EventProducer {
             );
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
-            throw new RuntimeException("Interrupted while sending Kafka event", exception);
+            throw new RuntimeException(
+                    "Interrupted while sending Kafka event",
+                    exception
+            );
         } catch (ExecutionException exception) {
-            throw new RuntimeException("Failed to send Kafka event", exception);
+            throw new RuntimeException(
+                    "Failed to send Kafka event",
+                    exception
+            );
         }
     }
 
@@ -62,7 +90,10 @@ public class EventProducer {
                     objectMapper.writeValueAsString(event)
             );
         } catch (JsonProcessingException exception) {
-            throw new RuntimeException("Failed to serialize OrderCreatedEvent", exception);
+            throw new RuntimeException(
+                    "Failed to serialize OrderCreatedEvent",
+                    exception
+            );
         }
     }
 
@@ -74,7 +105,10 @@ public class EventProducer {
                     objectMapper.writeValueAsString(event)
             );
         } catch (JsonProcessingException exception) {
-            throw new RuntimeException("Failed to serialize PaymentPaidEvent", exception);
+            throw new RuntimeException(
+                    "Failed to serialize PaymentPaidEvent",
+                    exception
+            );
         }
     }
 }

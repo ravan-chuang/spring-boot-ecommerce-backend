@@ -107,7 +107,8 @@ public class OutboxEventPublisher {
             eventProducer.send(
                     event.getTopic(),
                     event.getAggregateId(),
-                    event.getPayload()
+                    event.getPayload(),
+                    event.getId()
             );
 
             event.markPublished();

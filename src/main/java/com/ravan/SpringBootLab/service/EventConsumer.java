@@ -2,14 +2,35 @@ package com.ravan.SpringBootLab.service;
 
 import com.ravan.SpringBootLab.config.KafkaTopicConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.header.Header;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.kafka.annotation.BackOff;
 import org.springframework.kafka.annotation.DltHandler;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.annotation.RetryableTopic;
-import org.springframework.kafka.annotation.BackOff;
 import org.springframework.stereotype.Component;
+
+import java.nio.charset.StandardCharsets;
+import java.util.UUID;
 
 @Component
 public class EventConsumer {
+
+    private static final Logger logger =
+            LoggerFactory.getLogger(EventConsumer.class);
+
+    private static final String ORDER_CREATED_CONSUMER =
+            "order-created-consumer";
+
+    private static final String PAYMENT_PAID_CONSUMER =
+            "payment-paid-consumer";
+
+    private final ProcessedEventService processedEventService;
+
+    public EventConsumer(ProcessedEventService processedEventService) {
+        this.processedEventService = processedEventService;
+    }
 
     @RetryableTopic(
             attempts = "4",
@@ -23,12 +44,16 @@ public class EventConsumer {
     )
     @KafkaListener(
             topics = KafkaTopicConfig.ORDER_CREATED_TOPIC,
-            groupId = "order-created-consumer"
+            groupId = ORDER_CREATED_CONSUMER
     )
-    public void handleOrderCreatedEvent(String message) {
-        System.out.println("Received raw OrderCreatedEvent message: " + message);
-
-        processOrderCreatedEvent(message);
+    public void handleOrderCreatedEvent(
+            ConsumerRecord<String, String> record
+    ) {
+        processWithIdempotency(
+                record,
+                ORDER_CREATED_CONSUMER,
+                () -> processOrderCreatedEvent(record.value())
+        );
     }
 
     @RetryableTopic(
@@ -43,40 +68,100 @@ public class EventConsumer {
     )
     @KafkaListener(
             topics = KafkaTopicConfig.PAYMENT_PAID_TOPIC,
-            groupId = "payment-paid-consumer"
+            groupId = PAYMENT_PAID_CONSUMER
     )
-    public void handlePaymentPaidEvent(String message) {
-        System.out.println("Received raw PaymentPaidEvent message: " + message);
-
-        processPaymentPaidEvent(message);
+    public void handlePaymentPaidEvent(
+            ConsumerRecord<String, String> record
+    ) {
+        processWithIdempotency(
+                record,
+                PAYMENT_PAID_CONSUMER,
+                () -> processPaymentPaidEvent(record.value())
+        );
     }
 
     @DltHandler
     public void handleDeadLetterMessage(
             ConsumerRecord<String, String> record
     ) {
-        System.err.println(
-                "Message moved to DLT: topic=" + record.topic()
-                        + ", partition=" + record.partition()
-                        + ", offset=" + record.offset()
-                        + ", key=" + record.key()
-                        + ", value=" + record.value()
+        logger.error(
+                "Message moved to DLT: topic={}, partition={}, offset={}, key={}, value={}",
+                record.topic(),
+                record.partition(),
+                record.offset(),
+                record.key(),
+                record.value()
         );
+    }
+
+    private void processWithIdempotency(
+            ConsumerRecord<String, String> record,
+            String consumerName,
+            Runnable businessAction
+    ) {
+        UUID eventId = extractOutboxEventId(record);
+
+        if (eventId == null) {
+            logger.warn(
+                    "Received event without outbox-event-id header; processing without deduplication: topic={}, offset={}",
+                    record.topic(),
+                    record.offset()
+            );
+
+            businessAction.run();
+            return;
+        }
+
+        processedEventService.processIfFirstTime(
+                eventId,
+                consumerName,
+                businessAction
+        );
+    }
+
+    private UUID extractOutboxEventId(
+            ConsumerRecord<String, String> record
+    ) {
+        Header header = record.headers()
+                .lastHeader(EventProducer.OUTBOX_EVENT_ID_HEADER);
+
+        if (header == null || header.value() == null) {
+            return null;
+        }
+
+        try {
+            return UUID.fromString(
+                    new String(header.value(), StandardCharsets.UTF_8)
+            );
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalArgumentException(
+                    "Invalid outbox-event-id header: "
+                            + new String(
+                                    header.value(),
+                                    StandardCharsets.UTF_8
+                            ),
+                    exception
+            );
+        }
     }
 
     private void processOrderCreatedEvent(String message) {
         if (message == null || message.isBlank()) {
-            throw new IllegalArgumentException("OrderCreatedEvent message is empty");
+            throw new IllegalArgumentException(
+                    "OrderCreatedEvent message is empty"
+            );
         }
 
-        System.out.println("Consumed OrderCreatedEvent: " + message);
+        logger.info("Consumed OrderCreatedEvent: {}", message);
     }
 
     private void processPaymentPaidEvent(String message) {
         if (message == null || message.isBlank()) {
-            throw new IllegalArgumentException("PaymentPaidEvent message is empty");
+            throw new IllegalArgumentException(
+                    "PaymentPaidEvent message is empty"
+            );
         }
 
-        System.out.println("Consumed PaymentPaidEvent: " + message);
+        logger.info("Consumed PaymentPaidEvent: {}", message);
     }
 }
