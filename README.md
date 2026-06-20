@@ -2,9 +2,9 @@
 
 [![CI](https://github.com/ravan-chuang/spring-boot-ecommerce-backend/actions/workflows/ci.yml/badge.svg)](https://github.com/ravan-chuang/spring-boot-ecommerce-backend/actions/workflows/ci.yml)
 
-A production-oriented e-commerce backend built with Spring Boot, PostgreSQL, Redis, Kafka, JWT authentication, role-based authorization, user ownership checks, Flyway database migrations, Testcontainers-based integration tests, Kafka retry and dead-letter topic handling, transactional outbox failure governance and replay, and Spring Boot Actuator health checks.
+A production-oriented e-commerce backend built with Spring Boot, PostgreSQL, Redis, Kafka, JWT authentication, role-based authorization, user ownership checks, Flyway database migrations, Testcontainers-based integration tests, Kafka retry and dead-letter topic handling, transactional outbox failure governance and replay, multi-instance-safe event claiming, Prometheus metrics, Grafana dashboards, and Spring Boot Actuator health checks.
 
-This project is not only a basic CRUD system. It focuses on backend engineering concepts such as transactional order processing, optimistic locking, payment idempotency, Redis caching, Kafka-based event-driven architecture, JWT authentication, ADMIN/USER authorization, user ownership checks, Flyway-managed schema versioning, self-contained integration testing with Testcontainers, Kafka retry and dead-letter topic handling, transactional outbox event publishing, failed-event replay, and service health monitoring.
+This project is not only a basic CRUD system. It focuses on backend engineering concepts such as transactional order processing, optimistic locking, payment idempotency, Redis caching, Kafka-based event-driven architecture, JWT authentication, ADMIN/USER authorization, user ownership checks, Flyway-managed schema versioning, self-contained integration testing with Testcontainers, Kafka retry and dead-letter topic handling, transactional outbox event publishing, failed-event replay, multi-instance-safe event processing, Prometheus/Grafana observability, and service health monitoring.
 
 ## Tech Stack
 
@@ -23,6 +23,9 @@ This project is not only a basic CRUD system. It focuses on backend engineering 
 - Testcontainers
 - Swagger / OpenAPI
 - Spring Boot Actuator
+- Micrometer
+- Prometheus
+- Grafana
 - Maven
 
 ## Core Features
@@ -121,6 +124,8 @@ POST   /api/auth/register             Public
 POST   /api/auth/login                Public
 GET    /actuator/health               Public
 GET    /actuator/info                 Public
+GET    /actuator/prometheus            Public for local Docker Prometheus scraping
+GET    /actuator/metrics/**            ADMIN only
 GET    /api/admin/outbox/failed       ADMIN only
 POST   /api/admin/outbox/{eventId}/replay ADMIN only
 ```
@@ -376,6 +381,54 @@ ADMIN replay → FAILED event reset to PENDING
 Normal USER → rejected from ADMIN outbox APIs
 ```
 
+## Multi-Instance-Safe Outbox Processing
+
+The Outbox Publisher is designed so multiple application instances can process the same `outbox_events` table without publishing the same pending event concurrently.
+
+Additional schema migration:
+
+```text
+src/main/resources/db/migration/V3__add_outbox_processing_lease.sql
+```
+
+Additional outbox fields:
+
+```text
+processing_at
+processing_by
+```
+
+Event states:
+
+```text
+PENDING      Waiting to be claimed
+PROCESSING   Claimed by one publisher instance
+PUBLISHED    Successfully delivered to Kafka
+FAILED       Retry limit reached; requires operational action
+```
+
+Claiming flow:
+
+```text
+PENDING
+→ SELECT ... FOR UPDATE SKIP LOCKED
+→ one publisher instance claims the event
+→ PROCESSING with processing_by and processing_at
+→ Kafka publish
+→ PUBLISHED
+```
+
+Lease recovery protects against an application instance stopping after it has claimed an event:
+
+```text
+PROCESSING lease expires
+→ recovery job detects expired processing_at
+→ event returns to PENDING
+→ another publisher instance can claim it
+```
+
+This implementation uses a short transactional claim step, then publishes to Kafka outside the database lock. It also includes integration coverage for exclusive claiming and expired-lease recovery.
+
 ## Redis Cache
 
 Product query results are cached in Redis to reduce database access.
@@ -415,6 +468,7 @@ Database migrations include:
 ```text
 src/main/resources/db/migration/V1__init_schema.sql
 src/main/resources/db/migration/V2__create_outbox_events.sql
+src/main/resources/db/migration/V3__add_outbox_processing_lease.sql
 ```
 
 Hibernate is configured to validate the schema instead of automatically updating it:
@@ -442,11 +496,12 @@ docker exec -it spring_boot_lab_postgres psql -U ravan -d spring_boot_lab \
   -c "SELECT installed_rank, version, description, success FROM flyway_schema_history;"
 ```
 
-Expected result includes both schema migrations:
+Expected result includes all schema migrations:
 
 ```text
 1 | 1 | init schema | t
 2 | 2 | create outbox events | t
+3 | 3 | add outbox processing lease | t
 ```
 
 ## Testcontainers Integration Testing
@@ -487,7 +542,7 @@ Run all tests:
 Expected result:
 
 ```text
-Tests run: 24, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 28, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 ```
 
@@ -528,58 +583,144 @@ flowchart TD
     RetryTopic --> DLT[Dead-Letter Topics]
 
     Admin[ADMIN Outbox API] --> Outbox
+
+    AppMetrics[Micrometer Outbox Metrics] --> Prometheus[Prometheus]
+    Prometheus --> Grafana[Grafana Outbox Dashboard]
 ```
 
-## Observability and Health Checks
+## Observability, Prometheus, and Grafana
 
-This project uses Spring Boot Actuator to expose service health and application metadata.
+This project uses Spring Boot Actuator, Micrometer, Prometheus, and Grafana for health checks and runtime observability.
 
-Available endpoints:
+### Actuator endpoints
 
 ```text
-/actuator/health
-/actuator/info
+/actuator/health                 Public
+/actuator/info                   Public
+/actuator/prometheus             Public for local Docker Prometheus scraping
+/actuator/metrics/**             ADMIN only
 ```
 
-The health endpoint reports the status of important runtime components such as:
+The health endpoint reports important runtime components such as PostgreSQL, Redis, disk space, liveness state, and readiness state.
 
-- PostgreSQL
-- Redis
-- Disk space
-- Liveness state
-- Readiness state
+### Custom Outbox metrics
 
-Example:
+The application exports custom Micrometer metrics:
 
-```bash
-curl http://localhost:8080/actuator/health
+```text
+outbox.events{status=PENDING}
+outbox.events{status=PROCESSING}
+outbox.events{status=FAILED}
+
+outbox.publish.success
+outbox.publish.failure
+outbox.events.claimed
+outbox.processing.recovered
 ```
 
-Example response:
+Prometheus converts these names to:
 
-```json
-{
-  "status": "UP"
-}
+```text
+outbox_events
+outbox_publish_success_total
+outbox_publish_failure_total
+outbox_events_claimed_total
+outbox_processing_recovered_total
 ```
 
-The info endpoint exposes basic application metadata:
+Example PromQL queries:
 
-```bash
-curl http://localhost:8080/actuator/info
+```promql
+outbox_events{status="FAILED"}
 ```
 
-Example response:
-
-```json
-{
-  "app": {
-    "name": "Spring Boot E-Commerce Backend",
-    "description": "Production-oriented e-commerce backend with JWT, ownership authorization, Redis, Kafka, Flyway, Testcontainers, Docker, and CI",
-    "version": "1.0.0"
-  }
-}
+```promql
+increase(outbox_publish_success_total[10m])
 ```
+
+```promql
+increase(outbox_events_claimed_total[10m])
+```
+
+### Prometheus and Grafana
+
+Docker Compose includes:
+
+- Prometheus on `http://localhost:9090`
+- Grafana on `http://localhost:3000`
+- Spring Boot application scraped every 5 seconds from `/actuator/prometheus`
+
+Local Grafana credentials:
+
+```text
+username: admin
+password: admin
+```
+
+The repository provisions the Prometheus datasource and an Outbox dashboard automatically:
+
+```text
+observability/prometheus/prometheus.yml
+observability/grafana/provisioning/datasources/prometheus.yml
+observability/grafana/provisioning/dashboards/dashboard-provider.yml
+observability/grafana/dashboards/outbox-dashboard.json
+```
+
+Dashboard panels:
+
+```text
+Outbox Pending Events
+Outbox Processing Events
+Outbox Failed Events
+Outbox Publish Rate
+Outbox Worker Activity
+```
+
+### End-to-End Resilience Verification
+
+The project has been manually verified through this complete operational scenario:
+
+```text
+A. Normal flow
+Create order and payment
+→ ORDER_CREATED and PAYMENT_PAID persisted to outbox_events
+→ publisher claims events
+→ Kafka publish succeeds
+→ events become PUBLISHED
+→ Prometheus success and claimed counters increase
+
+B. Kafka outage
+Stop Kafka
+→ business order transaction still succeeds
+→ outbox event remains durable in PostgreSQL
+→ publisher retries delivery
+→ outbox.publish.failure increases
+→ event reaches FAILED after the configured retry limit
+
+C. Operational recovery
+Restart Kafka
+→ ADMIN inspects failed event
+→ ADMIN replays event
+→ event returns to PENDING
+→ publisher delivers it to Kafka
+→ event becomes PUBLISHED
+→ FAILED gauge returns to zero
+```
+
+This verifies the complete operational chain:
+
+```text
+Spring Boot
+→ Transactional Outbox
+→ multi-instance-safe claim and lease recovery
+→ Kafka
+→ Micrometer
+→ Prometheus
+→ Grafana
+→ ADMIN replay
+```
+
+For a public production deployment, `/actuator/prometheus` should not be exposed directly to the Internet. Use private networking, a dedicated management port, mTLS, or network policy.
 
 ## Docker Services
 
@@ -591,6 +732,8 @@ Services:
 - PostgreSQL
 - Redis
 - Kafka
+- Prometheus
+- Grafana
 
 Start services:
 
@@ -614,6 +757,8 @@ This includes:
 - PostgreSQL
 - Redis
 - Kafka
+- Prometheus
+- Grafana
 
 ### Start the full stack
 
@@ -1067,6 +1212,12 @@ Consumed PaymentPaidEvent: paymentId=7, orderId=10, amount=89999.00, method=CRED
 - Structured logging
 - Service health checks
 - Liveness and readiness checks
+- Multi-instance-safe event claiming with SKIP LOCKED
+- Processing leases and expired-lease recovery
+- Micrometer custom metrics
+- Prometheus scraping and PromQL
+- Grafana dashboard provisioning
+- Failure recovery observability
 
 ## Completed Engineering Improvements
 
@@ -1094,6 +1245,13 @@ Consumed PaymentPaidEvent: paymentId=7, orderId=10, amount=89999.00, method=CRED
 - Added order and payment outbox persistence tests
 - Added ADMIN APIs to inspect FAILED events and replay them
 - Added ADMIN outbox authorization and replay integration tests
+- Added multi-instance-safe outbox claiming with PostgreSQL SKIP LOCKED
+- Added processing leases and expired-lease recovery
+- Added integration tests for exclusive claiming and lease recovery
+- Added Micrometer outbox gauges and counters
+- Added ADMIN authorization tests for Actuator outbox metrics
+- Added Prometheus scrape configuration and Grafana dashboard provisioning
+- Manually verified normal publication, Kafka outage, FAILED governance, ADMIN replay, and successful recovery
 - Updated full order flow and payment tests to use JWT ownership authorization
 
 ## Future Improvements
@@ -1102,7 +1260,9 @@ Consumed PaymentPaidEvent: paymentId=7, orderId=10, amount=89999.00, method=CRED
 - Add more unit tests and integration tests
 - Add deployment environment
 - Add performance testing
-- Add monitoring with Prometheus and Grafana
+- Add alert rules for sustained FAILED outbox events and publish failures
+- Add a public deployment environment with private observability networking
+- Add consumer-side idempotency for at-least-once event delivery
 
 ## License
 
