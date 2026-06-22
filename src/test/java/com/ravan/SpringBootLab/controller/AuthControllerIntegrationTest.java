@@ -1,5 +1,7 @@
 package com.ravan.SpringBootLab.controller;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ravan.SpringBootLab.TestcontainersIntegrationTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -7,11 +9,13 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 
 import java.util.UUID;
 
-import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.blankOrNullString;
+import static org.hamcrest.Matchers.not;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -23,6 +27,9 @@ class AuthControllerIntegrationTest extends TestcontainersIntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @Autowired
+    private ObjectMapper objectMapper;
 
     @Test
     void shouldRegisterUserSuccessfully() throws Exception {
@@ -43,6 +50,9 @@ class AuthControllerIntegrationTest extends TestcontainersIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("Register successfully"))
                 .andExpect(jsonPath("$.data.token", not(blankOrNullString())))
+                .andExpect(jsonPath("$.data.accessToken", not(blankOrNullString())))
+                .andExpect(jsonPath("$.data.refreshToken", not(blankOrNullString())))
+                .andExpect(jsonPath("$.data.tokenType").value("Bearer"))
                 .andExpect(jsonPath("$.data.email").value(email))
                 .andExpect(jsonPath("$.data.role").value("USER"));
     }
@@ -66,6 +76,8 @@ class AuthControllerIntegrationTest extends TestcontainersIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("Login successfully"))
                 .andExpect(jsonPath("$.data.token", not(blankOrNullString())))
+                .andExpect(jsonPath("$.data.accessToken", not(blankOrNullString())))
+                .andExpect(jsonPath("$.data.refreshToken", not(blankOrNullString())))
                 .andExpect(jsonPath("$.data.email").value(email))
                 .andExpect(jsonPath("$.data.role").value("USER"));
     }
@@ -110,6 +122,50 @@ class AuthControllerIntegrationTest extends TestcontainersIntegrationTest {
                 .andExpect(status().isUnauthorized());
     }
 
+    @Test
+    void shouldRotateRefreshTokenAndRejectOldRefreshToken() throws Exception {
+        String email = "refresh-rotation-" + UUID.randomUUID() + "@example.com";
+        TokenPair originalTokens = registerAndGetTokens(email, "password123");
+
+        MvcResult refreshResult = mockMvc.perform(post("/api/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(refreshRequest(originalTokens.refreshToken())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Token refreshed successfully"))
+                .andExpect(jsonPath("$.data.accessToken", not(blankOrNullString())))
+                .andExpect(jsonPath("$.data.refreshToken", not(blankOrNullString())))
+                .andReturn();
+
+        TokenPair rotatedTokens = extractTokens(refreshResult);
+
+        assertNotEquals(
+                originalTokens.refreshToken(),
+                rotatedTokens.refreshToken()
+        );
+
+        mockMvc.perform(post("/api/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(refreshRequest(originalTokens.refreshToken())))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void shouldRejectRefreshTokenAfterLogout() throws Exception {
+        String email = "logout-test-" + UUID.randomUUID() + "@example.com";
+        TokenPair tokens = registerAndGetTokens(email, "password123");
+
+        mockMvc.perform(post("/api/auth/logout")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(refreshRequest(tokens.refreshToken())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Logout successfully"));
+
+        mockMvc.perform(post("/api/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(refreshRequest(tokens.refreshToken())))
+                .andExpect(status().isUnauthorized());
+    }
+
     private void registerUser(String email, String password) throws Exception {
         String registerJson = """
                 {
@@ -124,5 +180,54 @@ class AuthControllerIntegrationTest extends TestcontainersIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(registerJson))
                 .andExpect(status().isOk());
+    }
+
+    private TokenPair registerAndGetTokens(
+            String email,
+            String password
+    ) throws Exception {
+        String registerJson = """
+                {
+                  "name": "Refresh Token Test User",
+                  "email": "%s",
+                  "password": "%s",
+                  "skill": "Java Backend"
+                }
+                """.formatted(email, password);
+
+        MvcResult result = mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(registerJson))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.accessToken", not(blankOrNullString())))
+                .andExpect(jsonPath("$.data.refreshToken", not(blankOrNullString())))
+                .andReturn();
+
+        return extractTokens(result);
+    }
+
+    private TokenPair extractTokens(MvcResult result) throws Exception {
+        JsonNode data = objectMapper
+                .readTree(result.getResponse().getContentAsString())
+                .path("data");
+
+        return new TokenPair(
+                data.path("accessToken").asText(),
+                data.path("refreshToken").asText()
+        );
+    }
+
+    private String refreshRequest(String refreshToken) {
+        return """
+                {
+                  "refreshToken": "%s"
+                }
+                """.formatted(refreshToken);
+    }
+
+    private record TokenPair(
+            String accessToken,
+            String refreshToken
+    ) {
     }
 }
