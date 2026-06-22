@@ -2,349 +2,222 @@
 
 [![CI](https://github.com/ravan-chuang/spring-boot-ecommerce-backend/actions/workflows/ci.yml/badge.svg)](https://github.com/ravan-chuang/spring-boot-ecommerce-backend/actions/workflows/ci.yml)
 
-A production-oriented e-commerce backend built with Spring Boot, PostgreSQL, Redis, Kafka, JWT authentication, role-based authorization, user ownership checks, Flyway database migrations, Testcontainers-based integration tests, Kafka retry and dead-letter topic handling, transactional outbox failure governance and replay, multi-instance-safe event claiming, Prometheus metrics, Grafana dashboards, consumer idempotency, and Spring Boot Actuator health checks.
+A production-minded e-commerce backend built with Spring Boot, PostgreSQL, Redis, Kafka, JWT authentication, transactional outbox delivery, idempotent consumers, observability, and security-event monitoring.
 
-This project is not only a basic CRUD system. It focuses on backend engineering concepts such as transactional order processing, optimistic locking, payment idempotency, Redis caching, Kafka-based event-driven architecture, JWT authentication, ADMIN/USER authorization, user ownership checks, Flyway-managed schema versioning, self-contained integration testing with Testcontainers, Kafka retry and dead-letter topic handling, transactional outbox event publishing, failed-event replay, multi-instance-safe event processing, Prometheus/Grafana observability, idempotent Kafka consumer processing, and service health monitoring.
+This is intentionally more than a CRUD project. It demonstrates how a backend handles durable event delivery, duplicate processing, authorization, token lifecycle management, failure recovery, metrics, alerting, and integration testing with real infrastructure.
+
+---
+
+## Highlights
+
+- JWT access tokens with refresh-token rotation and revocation
+- Multi-device session management: list sessions, revoke one session, revoke all sessions
+- BCrypt passwords, USER / ADMIN authorization, and resource ownership checks
+- Payment idempotency and optimistic locking for stock consistency
+- Transactional Outbox with retry governance, FAILED state, and ADMIN replay
+- Kafka retry topics, dead-letter topics, and idempotent consumer processing
+- PostgreSQL `SKIP LOCKED` event claiming and processing-lease recovery
+- Prometheus, Grafana, Alertmanager, and Discord incident notifications
+- Authentication audit logs and suspicious-login monitoring
+- Testcontainers integration tests for PostgreSQL, Redis, and Kafka
+- Docker Compose full-stack local runtime
+- Spring profiles for local, production, and test environments
+
+---
 
 ## Tech Stack
 
-- Java 25
-- Spring Boot 4
-- Spring Web
-- Spring Security
-- JWT
-- Spring Data JPA
-- Hibernate
-- PostgreSQL
-- Redis
-- Apache Kafka
-- Spring Retry
-- Docker Compose
-- Testcontainers
-- Swagger / OpenAPI
-- Spring Boot Actuator
-- Micrometer
-- Prometheus
-- Grafana
-- Maven
+| Area | Technologies |
+|---|---|
+| Language / Framework | Java 25, Spring Boot 4 |
+| API / Security | Spring Web, Spring Security, JWT, Swagger / OpenAPI |
+| Persistence | PostgreSQL, Spring Data JPA, Hibernate, Flyway |
+| Cache / Messaging | Redis, Apache Kafka, Spring Kafka |
+| Reliability | Transactional Outbox, retry topics, DLT, idempotent consumers |
+| Observability | Actuator, Micrometer, Prometheus, Grafana, Alertmanager |
+| Testing | JUnit, MockMvc, Testcontainers |
+| Delivery | Docker, Docker Compose, GitHub Actions, Maven |
+
+---
+
+## Architecture
+
+```mermaid
+flowchart TD
+    Client[Client / Swagger / curl] --> API[Spring Boot REST API]
+    API --> Security[Spring Security + JWT]
+    Security --> Auth[Auth / Session Services]
+    Auth --> Users[(users)]
+    Auth --> RefreshTokens[(refresh_tokens)]
+    Auth --> AuthAudit[(auth_audit_logs)]
+
+    API --> Services[Business Services]
+    Services --> PostgreSQL[(PostgreSQL)]
+    Services --> Redis[(Redis Cache)]
+    Services --> Outbox[(outbox_events)]
+
+    Outbox --> Publisher[Scheduled Outbox Publisher]
+    Publisher --> Kafka[Kafka]
+    Kafka --> Consumer[Kafka Consumers]
+    Consumer --> Processed[(processed_events)]
+    Consumer --> OrderAudit[(order_event_audit)]
+    Kafka --> Retry[Retry Topics]
+    Retry --> DLT[Dead-Letter Topics]
+
+    API --> Metrics[Micrometer]
+    Metrics --> Prometheus[Prometheus]
+    Prometheus --> Grafana[Grafana]
+    Prometheus --> Alertmanager[Alertmanager]
+    Alertmanager --> Discord[Discord #backend-alerts]
+```
+
+---
 
 ## Core Features
 
-### Authentication and Authorization
+### Authentication, Refresh Tokens, and Session Management
 
-- User registration and login
-- Password hashing with BCrypt
-- JWT token generation
-- USER and ADMIN roles
-- Public product read APIs
-- ADMIN-only product create, update, and delete APIs
-- Authenticated USER ownership checks for cart, order, and payment APIs
-- Testcontainers-based integration tests for authentication, product authorization, user ownership, payment idempotency, full order flow, and Kafka retry / DLT handling
-- Kafka non-blocking retry and dead-letter topic handling for failed consumer messages
-- Transactional Outbox for reliable order and payment event publication
-- Idempotent Kafka consumer processing using `processed_events`
-- Auditable `ORDER_CREATED` consumer side effect using `order_event_audit`
-
-### User and Product APIs
-
-- Create, read, update, and delete users
-- Public product read APIs
-- ADMIN-only product create, update, and delete APIs
-- Product stock management
-- Product caching with Redis
-
-### Shopping Cart
-
-- Add products to cart
-- Update cart item quantity
-- Remove cart items
-- Calculate item subtotal
-- Require authenticated users to access only their own cart resources
-
-### Order System
-
-- Create orders from cart items
-- Persist order and order items
-- Deduct product stock during order creation
-- Use `@Transactional` to ensure order consistency
-- Prevent overselling with optimistic locking
-- Require authenticated users to access only their own orders
-
-### Payment System
-
-- Simulate payment for orders
-- Support payment method such as `CREDIT_CARD`
-- Update order status after successful payment
-- Prevent duplicate payment with `Idempotency-Key`
-- Require authenticated users to pay only their own orders
-
-### Database Migration
-
-- Manage PostgreSQL schema with Flyway migrations
-- Initialize database schema with `V1__init_schema.sql`
-- Replace Hibernate auto schema updates with schema validation
-- Keep database structure version-controlled and reproducible
-
-## Authentication and Authorization
-
-The project uses JWT-based authentication with Spring Security.
-
-### Authentication Flow
+The project uses short-lived JWT access tokens and long-lived opaque refresh tokens.
 
 ```text
-Register / Login → Receive JWT → Send JWT in Authorization header
+Access token
+→ JWT
+→ 15-minute lifetime
+→ sent in Authorization: Bearer <token>
+
+Refresh token
+→ cryptographically random opaque token
+→ 30-day lifetime
+→ only SHA-256 hash is stored in PostgreSQL
+→ rotated on refresh
+→ can be revoked by logout or session management APIs
 ```
 
-Example authorization header:
-
-```http
-Authorization: Bearer <JWT_TOKEN>
-```
-
-### Authorization Rules
+### Authentication flow
 
 ```text
-GET    /api/products/**              Public
-POST   /api/products                 ADMIN only
-PUT    /api/products/**              ADMIN only
-DELETE /api/products/**              ADMIN only
+Register / Login
+→ accessToken + refreshToken
 
-POST   /api/users/{userId}/cart/**   Authenticated user owner or ADMIN
-GET    /api/users/{userId}/cart/**    Authenticated user owner or ADMIN
-PUT    /api/users/{userId}/cart/**    Authenticated user owner or ADMIN
-DELETE /api/users/{userId}/cart/**    Authenticated user owner or ADMIN
+Refresh
+→ validate refresh token
+→ revoke old refresh token
+→ create replacement refresh token
+→ return new accessToken + refreshToken
 
-POST   /api/users/{userId}/orders/** Authenticated user owner or ADMIN
-GET    /api/users/{userId}/orders/**  Authenticated user owner or ADMIN
-GET    /api/orders/{orderId}          Order owner or ADMIN
-POST   /api/orders/{orderId}/cancel   Order owner or ADMIN
+Logout
+→ revoke supplied refresh token
 
-POST   /api/orders/{orderId}/payments Order owner or ADMIN
-GET    /api/orders/{orderId}/payment  Order owner or ADMIN
+Logout one session
+→ revoke every active refresh token in that session chain
 
-POST   /api/auth/register             Public
-POST   /api/auth/login                Public
-GET    /actuator/health               Public
-GET    /actuator/info                 Public
-GET    /actuator/prometheus            Public for local Docker Prometheus scraping
-GET    /actuator/metrics/**            ADMIN only
-GET    /api/admin/outbox/failed       ADMIN only
-POST   /api/admin/outbox/{eventId}/replay ADMIN only
+Logout all sessions
+→ revoke all active refresh tokens for the current user
 ```
 
-Product write APIs require the `ADMIN` role. Cart, order, and payment APIs require authentication and enforce ownership checks, so normal users can only operate on their own cart, orders, and payments. ADMIN users can pass ownership checks for management and testing scenarios.
-
-## Kafka Event-Driven Architecture
-
-The system records domain events in PostgreSQL within the same business transaction, then an Outbox Publisher publishes pending events to Kafka.
-
-Implemented events:
-
-- `order-created`
-- `payment-paid`
-
-### Event Flow
-
-```mermaid
-sequenceDiagram
-    participant Client
-    participant API as Spring Boot API
-    participant OrderService
-    participant DB as PostgreSQL
-    participant Publisher as Outbox Publisher
-    participant Kafka as Kafka Topic: order-created
-    participant Consumer as Kafka Consumer
-
-    Client->>API: Create Order
-    API->>OrderService: createOrderFromCart()
-    OrderService->>DB: Commit order data + ORDER_CREATED outbox event
-    Publisher->>DB: Read PENDING outbox event
-    Publisher->>Kafka: Publish OrderCreatedEvent
-    Publisher->>DB: Mark event PUBLISHED
-    Kafka->>Consumer: Consume order-created event
-    Consumer->>Consumer: Process OrderCreatedEvent
-```
-
-```mermaid
-sequenceDiagram
-    participant Client
-    participant API as Spring Boot API
-    participant PaymentService
-    participant DB as PostgreSQL
-    participant Publisher as Outbox Publisher
-    participant Kafka as Kafka Topic: payment-paid
-    participant Consumer as Kafka Consumer
-
-    Client->>API: Pay Order
-    API->>PaymentService: payOrder()
-    PaymentService->>DB: Commit payment data + PAYMENT_PAID outbox event
-    Publisher->>DB: Read PENDING outbox event
-    Publisher->>Kafka: Publish PaymentPaidEvent
-    Publisher->>DB: Mark event PUBLISHED
-    Kafka->>Consumer: Consume payment-paid event
-    Consumer->>Consumer: Process PaymentPaidEvent
-```
-
-## Kafka Retry and Dead-Letter Topics
-
-Kafka consumers use non-blocking retry topics to prevent malformed or temporarily unprocessable messages from blocking the main consumer flow.
-
-Retry policy:
+### Auth APIs
 
 ```text
-Initial processing failure
-→ retry after 1 second
-→ retry after 2 seconds
-→ retry after 4 seconds
-→ dead-letter topic (DLT)
+POST   /api/auth/register                    Public
+POST   /api/auth/login                       Public
+POST   /api/auth/refresh                     Public
+POST   /api/auth/logout                      Public
+
+GET    /api/auth/sessions                    Authenticated
+DELETE /api/auth/sessions/{sessionId}        Authenticated
+POST   /api/auth/sessions/logout-all         Authenticated
 ```
 
-Implemented retry behavior:
+### Session tracking
 
-- Retry topics are generated automatically from the original topic.
-- Failed `order-created` and `payment-paid` messages are retried with exponential backoff.
-- Messages that still fail after all retry attempts are forwarded to a dead-letter topic.
-- The DLT handler logs the failed message topic, partition, offset, key, and payload for later investigation.
-
-Main retry configuration:
+Each refresh-token session records:
 
 ```text
-src/main/java/com/ravan/SpringBootLab/config/KafkaRetryConfig.java
+sessionId
+deviceName
+ipAddress
+createdAt
+lastUsedAt
+expiresAt
 ```
 
-Consumer retry and DLT handling:
+Refresh-token rotation keeps the same `sessionId`, so token replacement still represents the same device session.
+
+### Authorization rules
 
 ```text
-src/main/java/com/ravan/SpringBootLab/service/EventConsumer.java
+GET    /api/products/**                      Public
+POST   /api/products                         ADMIN only
+PUT    /api/products/**                      ADMIN only
+DELETE /api/products/**                      ADMIN only
+
+/api/users/{userId}/cart/**                  User owner or ADMIN
+/api/users/{userId}/orders/**                User owner or ADMIN
+/api/orders/{orderId}/payments               Order owner or ADMIN
+
+GET    /api/admin/outbox/failed              ADMIN only
+POST   /api/admin/outbox/{eventId}/replay    ADMIN only
+
+GET    /actuator/health                      Public
+GET    /actuator/info                        Public
+GET    /actuator/prometheus                  Public for local Prometheus scraping
+GET    /actuator/metrics/**                  ADMIN only
 ```
 
-Example DLT log:
+---
 
-```text
-Message moved to DLT: topic=order-created-dlt, partition=0, offset=0, key=null, value=
-```
+## Transactional Outbox and Kafka Delivery
 
-### Manual DLT Verification
-
-Start the local infrastructure and Spring Boot application:
-
-```bash
-docker compose up -d postgres redis kafka
-./mvnw spring-boot:run
-```
-
-In another terminal, publish an empty message to trigger the retry flow:
-
-```bash
-printf '\n' | docker exec -i spring_boot_lab_kafka \
-  /opt/kafka/bin/kafka-console-producer.sh \
-  --bootstrap-server localhost:9092 \
-  --topic order-created
-```
-
-Then inspect the DLT topic:
-
-```bash
-docker exec -it spring_boot_lab_kafka \
-  /opt/kafka/bin/kafka-console-consumer.sh \
-  --bootstrap-server localhost:9092 \
-  --topic order-created-dlt \
-  --from-beginning \
-  --timeout-ms 5000
-```
-
-A console consumer timeout after processing is expected when no additional messages arrive.
-
-### Automated Retry / DLT Integration Test
-
-The retry and DLT workflow is also covered by an automated Testcontainers-based integration test:
-
-```text
-src/test/java/com/ravan/SpringBootLab/integration/KafkaRetryDltIntegrationTest.java
-```
-
-The test publishes an empty `order-created` message with a unique key, waits for the retry pipeline to complete, and verifies that the same message is eventually consumed from `order-created-dlt`.
-
-Verified flow:
-
-```text
-order-created
-→ retry after 1 second
-→ retry after 2 seconds
-→ retry after 4 seconds
-→ order-created-dlt
-```
-
-Run only this test:
-
-```bash
-./mvnw test -Dtest=KafkaRetryDltIntegrationTest
-```
-
-## Transactional Outbox and Failure Governance
-
-Order and payment data should not be committed independently from their Kafka events. This project uses the Transactional Outbox pattern to mitigate the dual-write consistency problem.
-
-Within the same PostgreSQL transaction, the application persists both business data and an outbox record:
+Order and payment changes must not be committed independently from their Kafka events. The project uses the Transactional Outbox pattern to reduce the dual-write consistency problem.
 
 ```text
 Create Order / Pay Order
 → persist business data
-→ persist outbox_events record with status PENDING
-→ commit one database transaction
-→ background publisher sends the event to Kafka
+→ persist PENDING outbox event in the same PostgreSQL transaction
+→ commit once
+→ background publisher claims event
+→ publish to Kafka
+→ mark PUBLISHED
 ```
 
-Outbox records include:
+### Event topics
 
 ```text
-id
-aggregate_type
-aggregate_id
-event_type
-topic
-payload
-status
-retry_count
-created_at
-published_at
-last_error
+order-created
+payment-paid
 ```
 
-Event states:
+### Outbox states
 
 ```text
-PENDING   Waiting to be published or retried
-PUBLISHED Successfully published to Kafka
-FAILED    Reached the configured retry limit and requires operational action
+PENDING      Waiting to be published or retried
+PROCESSING   Claimed by one publisher instance
+PUBLISHED    Successfully published to Kafka
+FAILED       Retry limit reached; operator action required
 ```
 
-### Publisher behavior
+### Multi-instance-safe claiming
+
+The publisher uses PostgreSQL row locking with:
+
+```sql
+SELECT ...
+FOR UPDATE SKIP LOCKED
+```
+
+This allows multiple application instances to claim different pending events without concurrently publishing the same event.
+
+A processing lease protects against an instance stopping after it has claimed an event:
 
 ```text
-PENDING
-→ Kafka publish succeeds
-→ PUBLISHED
-
-PENDING
-→ Kafka publish fails
-→ retry_count increases
-→ remains PENDING until the retry limit is reached
-
-retry limit reached
-→ FAILED
-→ automatic retry stops
+PROCESSING lease expires
+→ recovery job returns event to PENDING
+→ another instance may claim it
 ```
 
-The default retry limit is configurable:
+### Failed-event replay
 
-```properties
-outbox.publisher.max-attempts=10
-```
-
-### Failed-event administration
-
-ADMIN users can inspect failed events and schedule a replay.
+ADMIN users can inspect failed events and schedule replay:
 
 ```text
 GET  /api/admin/outbox/failed
@@ -356,105 +229,41 @@ Replay behavior:
 ```text
 FAILED
 → PENDING
-→ retry_count reset to 0
+→ retry_count reset
 → last_error cleared
-→ publisher can attempt Kafka delivery again
+→ publisher retries Kafka delivery
 ```
 
-Example requests:
+---
 
-```bash
-curl -i -X GET http://localhost:8080/api/admin/outbox/failed   -H "Authorization: Bearer $ADMIN_TOKEN"
-```
+## Kafka Retry, DLT, and Consumer Idempotency
 
-```bash
-curl -i -X POST http://localhost:8080/api/admin/outbox/{eventId}/replay   -H "Authorization: Bearer $ADMIN_TOKEN"
-```
+### Consumer retry policy
 
-### Outbox test coverage
+Malformed or temporarily unprocessable messages use non-blocking retry topics:
 
 ```text
-PENDING event → Kafka publish → PUBLISHED
-Kafka publish failure → PENDING + retry_count increment
-Maximum publish attempts → FAILED
-Order creation → ORDER_CREATED outbox event persisted
-Payment success → PAYMENT_PAID outbox event persisted
-ADMIN replay → FAILED event reset to PENDING
-Normal USER → rejected from ADMIN outbox APIs
+Initial failure
+→ retry after 1 second
+→ retry after 2 seconds
+→ retry after 4 seconds
+→ dead-letter topic
 ```
 
-## Multi-Instance-Safe Outbox Processing
+### Idempotent consumers
 
-The Outbox Publisher is designed so multiple application instances can process the same `outbox_events` table without publishing the same pending event concurrently.
+Kafka provides at-least-once delivery semantics, so duplicate delivery is possible.
 
-Additional schema migration:
-
-```text
-src/main/resources/db/migration/V3__add_outbox_processing_lease.sql
-src/main/resources/db/migration/V4__create_processed_events.sql
-src/main/resources/db/migration/V5__create_order_event_audit.sql
-```
-
-Additional outbox fields:
-
-```text
-processing_at
-processing_by
-```
-
-Event states:
-
-```text
-PENDING      Waiting to be claimed
-PROCESSING   Claimed by one publisher instance
-PUBLISHED    Successfully delivered to Kafka
-FAILED       Retry limit reached; requires operational action
-```
-
-Claiming flow:
-
-```text
-PENDING
-→ SELECT ... FOR UPDATE SKIP LOCKED
-→ one publisher instance claims the event
-→ PROCESSING with processing_by and processing_at
-→ Kafka publish
-→ PUBLISHED
-```
-
-Lease recovery protects against an application instance stopping after it has claimed an event:
-
-```text
-PROCESSING lease expires
-→ recovery job detects expired processing_at
-→ event returns to PENDING
-→ another publisher instance can claim it
-```
-
-This implementation uses a short transactional claim step, then publishes to Kafka outside the database lock. It also includes integration coverage for exclusive claiming and expired-lease recovery.
-
-## Idempotent Kafka Consumers and Auditable Side Effects
-
-Kafka provides at-least-once delivery semantics, so a consumer can receive the same event more than once. This project prevents duplicate consumer side effects by carrying the Outbox event UUID in a Kafka header:
+The outbox publisher attaches an event header:
 
 ```text
 outbox-event-id: <UUID>
 ```
 
-The publisher attaches this header when it sends an outbox event. Each consumer uses the event ID together with its consumer name to deduplicate delivery attempts.
-
-Additional Flyway migrations:
+Consumers use this ID with the consumer name as a deduplication key:
 
 ```text
-src/main/resources/db/migration/V4__create_processed_events.sql
-src/main/resources/db/migration/V5__create_order_event_audit.sql
-```
-
-### `processed_events`
-
-`processed_events` stores a unique marker for each event and consumer pair:
-
-```text
+processed_events
 (event_id, consumer_name)
 ```
 
@@ -462,90 +271,81 @@ Processing flow:
 
 ```text
 Kafka event arrives
-→ consumer reads outbox-event-id header
-→ INSERT INTO processed_events
-→ first insert succeeds: execute business side effect
-→ duplicate insert conflicts: skip the duplicate event
+→ insert processed-event marker
+→ first insert succeeds: run business side effect
+→ duplicate insert conflicts: skip duplicate delivery
 ```
 
-The marker insertion and consumer business action run in the same database transaction:
+The marker and business side effect run in one database transaction:
 
 ```text
 business action succeeds
-→ processed marker commits
+→ marker commits
 
 business action fails
 → transaction rolls back
-→ processed marker is removed
-→ Kafka retry can process the event again
+→ marker is removed
+→ retry can safely process again
 ```
 
-### `order_event_audit`
-
-The `ORDER_CREATED` consumer writes an auditable database side effect:
+The `ORDER_CREATED` consumer writes an auditable side effect to:
 
 ```text
 order_event_audit
 ```
 
-A single event ID can create only one audit record. This proves that duplicate Kafka delivery does not create duplicate business data.
-
 Verified behavior:
 
 ```text
-same outbox-event-id delivered twice
+same event delivered twice
 → processed_events contains 1 row
 → order_event_audit contains 1 row
-→ second delivery is skipped
+→ duplicate side effect is prevented
 ```
 
-Messages without the `outbox-event-id` header remain processable for backward compatibility, but they are logged as not deduplicated.
+---
 
-## Redis Cache
+## Payment Idempotency and Stock Consistency
 
-Product query results are cached in Redis to reduce database access.
+### Payment idempotency
 
-Example Redis key:
-
-```text
-products::1
-```
-
-## Payment Idempotency
-
-The payment API requires an `Idempotency-Key` header.
-
-This prevents duplicate payments when the same request is retried.
-
-Example:
+The payment endpoint requires an `Idempotency-Key`:
 
 ```http
 Idempotency-Key: pay-order-10-001
 ```
 
-If the same key is used again, the system returns the existing payment result instead of creating a duplicate payment.
+When the same key is retried, the API returns the previous payment result instead of creating a duplicate charge.
 
-## Optimistic Locking
+### Optimistic locking
 
-Product stock updates use optimistic locking to prevent overselling under concurrent order creation.
-
-The product table includes a `version` column managed by JPA `@Version`.
-
-## Flyway Database Migration
-
-This project uses Flyway to manage PostgreSQL schema versions.
-
-Database migrations include:
+Product stock uses JPA optimistic locking with an entity version column.
 
 ```text
-src/main/resources/db/migration/V1__init_schema.sql
-src/main/resources/db/migration/V2__create_outbox_events.sql
-src/main/resources/db/migration/V3__add_outbox_processing_lease.sql
-src/main/resources/db/migration/V4__create_processed_events.sql
-src/main/resources/db/migration/V5__create_order_event_audit.sql
+Concurrent orders
+→ version conflict detected
+→ one transaction retries or fails safely
+→ overselling is prevented
 ```
 
-Hibernate is configured to validate the schema instead of automatically updating it:
+---
+
+## Flyway Schema Migrations
+
+Flyway manages all PostgreSQL schema changes.
+
+```text
+V1__init_schema.sql
+V2__create_outbox_events.sql
+V3__add_outbox_processing_lease.sql
+V4__create_processed_events.sql
+V5__create_order_event_audit.sql
+V6__create_refresh_tokens.sql
+V7__add_refresh_token_sessions.sql
+V8__create_auth_audit_logs.sql
+```
+
+Hibernate validates the schema instead of auto-updating it:
 
 ```properties
 spring.jpa.hibernate.ddl-auto=validate
@@ -553,150 +353,89 @@ spring.flyway.enabled=true
 spring.flyway.locations=classpath:db/migration
 ```
 
-This makes the database schema reproducible, version-controlled, and closer to a production backend workflow.
-
-To reset the local database and rerun migrations:
+Check migration history:
 
 ```bash
-docker compose down -v
-docker compose up -d postgres redis kafka
-./mvnw test
-```
-
-Flyway migration history can be checked with:
-
-```bash
-docker exec -it spring_boot_lab_postgres psql -U ravan -d spring_boot_lab \
+docker exec -it spring_boot_lab_postgres \
+  psql -U ravan -d spring_boot_lab \
   -c "SELECT installed_rank, version, description, success FROM flyway_schema_history;"
 ```
 
-Expected result includes all schema migrations:
+---
+
+## Authentication Audit Logs and Security Monitoring
+
+Authentication events are stored in:
 
 ```text
-1 | 1 | init schema | t
-2 | 2 | create outbox events | t
-3 | 3 | add outbox processing lease | t
-4 | 4 | create processed events | t
-5 | 5 | create order event audit | t
+auth_audit_logs
 ```
 
-## Testcontainers Integration Testing
-
-This project uses Testcontainers to run integration tests with real infrastructure services instead of relying on manually started local containers.
-
-Testcontainers automatically starts test-time containers for:
-
-- PostgreSQL
-- Redis
-- Kafka
-
-The shared Testcontainers configuration is defined in:
+Recorded fields include:
 
 ```text
-src/test/java/com/ravan/SpringBootLab/TestcontainersIntegrationTest.java
+user_id
+event_type
+outcome
+ip_address
+device_name
+details
+created_at
 ```
 
-The integration tests dynamically inject container connection properties into Spring Boot:
+Audited actions include:
 
 ```text
-spring.datasource.url
-spring.datasource.username
-spring.datasource.password
-spring.data.redis.host
-spring.data.redis.port
-spring.kafka.bootstrap-servers
+register
+login
+refresh
+logout
+session_revoke
+sessions_revoke_all
 ```
 
-This makes the test suite more reproducible and closer to a CI-friendly backend workflow.
+Failed auth attempts use an independent transaction, so an audit record remains persisted even when the API request returns an error.
 
-Additional event-driven integration coverage verifies:
+### Authentication metrics
+
+Micrometer exports:
 
 ```text
-same Kafka event header delivered twice
-→ processed_events stores one marker
-→ order_event_audit stores one business side effect
-
-consumer business action throws
-→ processed marker rolls back
-→ a later retry can process the same event
+auth.events{action="login",outcome="success"}
+auth.events{action="login",outcome="failure"}
+auth.events{action="refresh",outcome="success"}
+auth.events{action="refresh",outcome="failure"}
+auth.events{action="logout",outcome="success"}
+auth.events{action="session_revoke",outcome="success"}
+auth.events{action="sessions_revoke_all",outcome="success"}
 ```
 
-Run all tests:
-
-```bash
-./mvnw test
-```
-
-Expected result:
+Prometheus exposes these as:
 
 ```text
-Tests run: 31, Failures: 0, Errors: 0, Skipped: 0
-BUILD SUCCESS
+auth_events_total
 ```
 
-For Docker Desktop on macOS, this project includes a test resource file to ensure Docker Java API compatibility:
+Example query:
 
-```text
-src/test/resources/docker-java.properties
+```promql
+increase(auth_events_total{action="login",outcome="failure"}[5m])
 ```
 
-It pins a compatible Docker Java API version for the local Docker Desktop environment:
+---
 
-```properties
-api.version=1.44
-```
-
-## System Architecture
-
-```mermaid
-flowchart TD
-    Client[Client / curl / Swagger] --> Controller[Spring Boot REST Controllers]
-    Controller --> Service[Service Layer]
-    Service --> Repository[Repository Layer]
-    Repository --> PostgreSQL[(PostgreSQL)]
-
-    Service --> Redis[(Redis Cache)]
-    Service --> Outbox[outbox_events: PENDING / PUBLISHED / FAILED]
-
-    Outbox --> Publisher[Scheduled Outbox Publisher]
-    Publisher --> Producer[Kafka Producer]
-    Producer --> OrderTopic[Kafka Topic: order-created]
-    Producer --> PaymentTopic[Kafka Topic: payment-paid]
-
-    OrderTopic --> OrderConsumer[OrderCreatedEvent Consumer]
-    PaymentTopic --> PaymentConsumer[PaymentPaidEvent Consumer]
-
-    OrderConsumer --> ProcessedEvents[(processed_events)]
-    OrderConsumer --> OrderAudit[(order_event_audit)]
-
-    OrderConsumer --> RetryTopic[Retry Topics]
-    PaymentConsumer --> RetryTopic
-    RetryTopic --> DLT[Dead-Letter Topics]
-
-    Admin[ADMIN Outbox API] --> Outbox
-
-    AppMetrics[Micrometer Outbox Metrics] --> Prometheus[Prometheus]
-    Prometheus --> Grafana[Grafana Outbox Dashboard]
-```
-
-## Observability, Prometheus, and Grafana
-
-This project uses Spring Boot Actuator, Micrometer, Prometheus, and Grafana for health checks and runtime observability.
+## Observability
 
 ### Actuator endpoints
 
 ```text
-/actuator/health                 Public
-/actuator/info                   Public
-/actuator/prometheus             Public for local Docker Prometheus scraping
-/actuator/metrics/**             ADMIN only
+/actuator/health
+/actuator/info
+/actuator/prometheus
+/actuator/metrics/**
 ```
 
-The health endpoint reports important runtime components such as PostgreSQL, Redis, disk space, liveness state, and readiness state.
-
-### Custom Outbox metrics
-
-The application exports custom Micrometer metrics:
+### Outbox metrics
 
 ```text
 outbox.events{status=PENDING}
@@ -709,7 +448,7 @@ outbox.events.claimed
 outbox.processing.recovered
 ```
 
-Prometheus converts these names to:
+Prometheus names:
 
 ```text
 outbox_events
@@ -719,27 +458,83 @@ outbox_events_claimed_total
 outbox_processing_recovered_total
 ```
 
-Example PromQL queries:
+### Grafana dashboard
 
-```promql
-outbox_events{status="FAILED"}
+Grafana is provisioned automatically with a Reliability & Security dashboard.
+
+```text
+Outbox Pending Events
+Outbox Processing Events
+Outbox Failed Events
+Outbox Publish Rate
+Outbox Worker Activity
+
+Login Successes — Last 30m
+Login Failures — Last 30m
+Authentication Activity Rate
+Session Security Actions — Last 30m
 ```
 
-```promql
-increase(outbox_publish_success_total[10m])
+### Alerting
+
+Prometheus evaluates alert rules. Alertmanager routes alerts to Discord.
+
+```text
+OutboxFailedEvents
+OutboxPublishFailuresDetected
+OutboxPendingBacklog
+SpringBootApplicationDown
+ExcessiveLoginFailures
 ```
 
+`ExcessiveLoginFailures` fires when at least five failed logins occur during a five-minute window and the condition remains true for one minute.
+
 ```promql
-increase(outbox_events_claimed_total[10m])
+increase(auth_events_total{action="login",outcome="failure"}[5m]) >= 5
 ```
 
-### Prometheus and Grafana
+> `increase()` may display a non-integer value because Prometheus extrapolates counter increases across the selected time window. This is expected.
 
-Docker Compose includes:
+### Verified incident workflows
 
-- Prometheus on `http://localhost:9090`
-- Grafana on `http://localhost:3000`
-- Spring Boot application scraped every 5 seconds from `/actuator/prometheus`
+#### 1. Kafka outage and operational recovery
+
+```text
+Kafka outage
+→ business transaction still commits
+→ outbox event remains durable in PostgreSQL
+→ publisher retries
+→ event reaches FAILED
+→ Prometheus and Alertmanager fire warning / critical alerts
+→ Discord receives FIRING notifications
+→ Kafka recovers
+→ ADMIN replays the failed event
+→ event becomes PUBLISHED
+→ Discord receives RESOLVED notifications
+```
+
+#### 2. Suspicious failed-login activity
+
+```text
+Failed login × 5
+→ auth_events_total increments
+→ Grafana Login Failures panel increases
+→ ExcessiveLoginFailures enters PENDING
+→ rule fires after 1 minute
+→ Discord receives FIRING notification
+→ after the time window expires
+→ alert resolves
+→ Discord receives RESOLVED notification
+```
+
+### Local observability URLs
+
+```text
+Swagger UI:     http://localhost:8080/swagger-ui/index.html
+Prometheus:     http://localhost:9090
+Grafana:        http://localhost:3000
+Alertmanager:   http://localhost:9093
+```
 
 Local Grafana credentials:
 
@@ -748,621 +543,283 @@ username: admin
 password: admin
 ```
 
-The repository provisions the Prometheus datasource and an Outbox dashboard automatically:
+For real deployment, do not publicly expose Prometheus, Grafana, Alertmanager, or `/actuator/prometheus`. Use private networking, a management network, IAM, HTTPS, and secret management.
+
+---
+
+## Spring Profiles
 
 ```text
-observability/prometheus/prometheus.yml
-observability/grafana/provisioning/datasources/prometheus.yml
-observability/grafana/provisioning/dashboards/dashboard-provider.yml
-observability/grafana/dashboards/outbox-dashboard.json
+application.properties
+→ shared configuration
+
+application-local.properties
+→ fast failure settings for local alert demos
+
+application-prod.properties
+→ conservative Kafka retry and timeout settings
+
+src/test/resources/application.properties
+→ test profile defaults
 ```
 
-Dashboard panels:
+The Docker Compose app service defaults to the local profile:
 
-```text
-Outbox Pending Events
-Outbox Processing Events
-Outbox Failed Events
-Outbox Publish Rate
-Outbox Worker Activity
+```yaml
+SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
 ```
 
-### End-to-End Resilience Verification
-
-The project has been manually verified through this complete operational scenario:
-
-```text
-A. Normal flow
-Create order and payment
-→ ORDER_CREATED and PAYMENT_PAID persisted to outbox_events
-→ publisher claims events
-→ Kafka publish succeeds
-→ events become PUBLISHED
-→ Prometheus success and claimed counters increase
-
-B. Kafka outage
-Stop Kafka
-→ business order transaction still succeeds
-→ outbox event remains durable in PostgreSQL
-→ publisher retries delivery
-→ outbox.publish.failure increases
-→ event reaches FAILED after the configured retry limit
-
-C. Operational recovery
-Restart Kafka
-→ ADMIN inspects failed event
-→ ADMIN replays event
-→ event returns to PENDING
-→ publisher delivers it to Kafka
-→ event becomes PUBLISHED
-→ FAILED gauge returns to zero
-```
-
-This verifies the complete operational chain:
-
-```text
-Spring Boot
-→ Transactional Outbox
-→ multi-instance-safe claim and lease recovery
-→ Kafka
-→ Micrometer
-→ Prometheus
-→ Grafana
-→ ADMIN replay
-```
-
-For a public production deployment, `/actuator/prometheus` should not be exposed directly to the Internet. Use private networking, a dedicated management port, mTLS, or network policy.
-
-## Docker Services
-
-This project uses Docker Compose to run infrastructure services.
-
-Services:
-
-- Spring Boot application
-- PostgreSQL
-- Redis
-- Kafka
-- Prometheus
-- Grafana
-
-Start services:
+Start with production settings:
 
 ```bash
-docker compose up -d
+SPRING_PROFILES_ACTIVE=prod docker compose up -d --build app
 ```
 
-Stop services:
+---
+
+## Docker Compose
+
+The full local stack includes:
+
+```text
+Spring Boot application
+PostgreSQL
+Redis
+Kafka
+Prometheus
+Grafana
+Alertmanager
+```
+
+Start everything:
+
+```bash
+docker compose up -d --build
+```
+
+Stop:
 
 ```bash
 docker compose down
 ```
 
-## Run with Docker Compose
-
-The entire backend stack can be started with Docker Compose.
-
-This includes:
-
-- Spring Boot application
-- PostgreSQL
-- Redis
-- Kafka
-- Prometheus
-- Grafana
-
-### Start the full stack
-
-```bash
-docker compose up --build
-```
-
-The Spring Boot application will be available at:
+Kafka listeners:
 
 ```text
-http://localhost:8080
+Host machine:                localhost:9092
+Spring Boot container:       kafka:29092
 ```
 
-Swagger UI:
+---
 
-```text
-http://localhost:8080/swagger-ui.html
-```
+## Local Development
 
-### Stop the full stack
+Start infrastructure and application:
 
 ```bash
-docker compose down
-```
-
-### Important Kafka Note
-
-The Docker Compose configuration uses different Kafka listeners for host access and container-to-container communication.
-
-- Host machine: `localhost:9092`
-- Spring Boot container: `kafka:29092`
-
-This prevents Kafka clients inside Docker from incorrectly connecting to `localhost:9092`.
-
-## How to Run Locally
-
-Use this mode if you want to run only PostgreSQL, Redis, and Kafka with Docker, while running the Spring Boot application directly on your machine.
-
-### 1. Start infrastructure services
-
-```bash
-docker compose up -d
-```
-
-Flyway will automatically run database migrations when the Spring Boot application starts.
-
-### 2. Run Spring Boot
-
-```bash
+docker compose up -d postgres redis kafka
 ./mvnw spring-boot:run
 ```
 
-### 3. Open Swagger UI
+Open Swagger:
 
 ```text
-http://localhost:8080/swagger-ui.html
+http://localhost:8080/swagger-ui/index.html
 ```
 
-## How to Run Tests
-
-The integration tests use Testcontainers, so PostgreSQL, Redis, and Kafka are started automatically during the test run.
-
-Make sure Docker Desktop is running, then execute:
+Reset local data and rerun migrations:
 
 ```bash
-./mvnw test
+docker compose down -v
+docker compose up -d
 ```
 
-You do not need to manually start Docker Compose services before running the test suite.
+---
 
-If Docker Desktop on macOS cannot be detected automatically, set the Docker socket path:
+## Testing
+
+The integration suite uses Testcontainers with real:
+
+```text
+PostgreSQL
+Redis
+Kafka
+```
+
+Run all tests:
+
+```bash
+./mvnw clean test
+```
+
+Current expected result:
+
+```text
+Tests run: 40, Failures: 0, Errors: 0, Skipped: 0
+BUILD SUCCESS
+```
+
+Key coverage includes:
+
+```text
+Authentication and authorization
+Refresh-token rotation and logout revocation
+Multi-device session management
+Authentication audit logs and metrics
+Product ADMIN authorization
+User ownership checks
+Payment idempotency
+Order flow and optimistic locking
+Kafka retry / DLT
+Transactional Outbox publishing and retry governance
+ADMIN failed-event replay
+Multi-instance event claiming and lease recovery
+Idempotent Kafka consumers
+Consumer-side audit effects
+Prometheus metric authorization
+Event-retention cleanup
+```
+
+For Docker Desktop on macOS:
 
 ```bash
 export DOCKER_HOST=unix://$HOME/.docker/run/docker.sock
 ```
 
-## API Demo Flow
-
-The following demo shows a complete e-commerce backend flow with JWT authentication, ADMIN product authorization, and USER ownership checks:
+The project also includes:
 
 ```text
-Register Admin → Promote Admin Role → Login Admin → Create Product → Register User → Login User → Add Product to Cart with USER token → Create Order with USER token → Pay Own Order with USER token
+src/test/resources/docker-java.properties
 ```
 
-Before running the demo, make sure the full stack is running:
+with a compatible Docker Java API version.
 
-```bash
-docker compose up --build
-```
+---
 
-The API server should be available at:
+## Example API Flow
 
 ```text
-http://localhost:8080
+Register / Login
+→ Authorize Swagger with accessToken
+→ ADMIN creates product
+→ USER adds product to cart
+→ USER creates order
+→ USER pays with Idempotency-Key
+→ Outbox publishes Kafka events
 ```
 
-### 1. Register an admin account
+Example login request:
 
 ```bash
-curl -i -X POST http://localhost:8080/api/auth/register \
+curl -X POST http://localhost:8080/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "Admin User",
-    "email": "admin@example.com",
-    "password": "password123",
-    "skill": "Java Backend"
-  }'
-```
-
-By default, newly registered users are created with the `USER` role. For this demo, promote the account to `ADMIN` directly in PostgreSQL:
-
-```bash
-docker exec -it spring_boot_lab_postgres psql -U ravan -d spring_boot_lab \
-  -c "UPDATE users SET role = 'ADMIN' WHERE email = 'admin@example.com';"
-```
-
-### 2. Login as admin and save the JWT token
-
-```bash
-curl -i -X POST http://localhost:8080/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "admin@example.com",
+    "email": "demo-user@example.com",
     "password": "password123"
   }'
 ```
 
-Example response:
+The response returns:
 
 ```json
 {
+  "status": 200,
   "message": "Login successfully",
   "data": {
-    "token": "<ADMIN_JWT_TOKEN>",
-    "email": "admin@example.com",
-    "role": "ADMIN"
-  }
-}
-```
-
-Save the returned token:
-
-```bash
-ADMIN_TOKEN="<ADMIN_JWT_TOKEN>"
-```
-
-### 3. Create a product with ADMIN token
-
-`POST /api/products` requires an ADMIN JWT token.
-
-```bash
-curl -i -X POST http://localhost:8080/api/products \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -d '{
-    "name": "MacBook Pro M3",
-    "description": "Demo product for order flow",
-    "price": 89999,
-    "stock": 5
-  }'
-```
-
-Example response:
-
-```json
-{
-  "message": "Product created successfully",
-  "data": {
-    "id": 1,
-    "name": "MacBook Pro M3",
-    "price": 89999,
-    "stock": 5
-  }
-}
-```
-
-Save the returned product id.
-
-### 4. Verify product write authorization
-
-Creating a product without a token should be rejected:
-
-```bash
-curl -i -X POST http://localhost:8080/api/products \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Unauthorized Product",
-    "description": "This request should be rejected",
-    "price": 1000,
-    "stock": 1
-  }'
-```
-
-Expected result:
-
-```text
-403 Forbidden
-```
-
-Reading products is public:
-
-```bash
-curl -i http://localhost:8080/api/products
-```
-
-### 5. Create a normal user
-
-```bash
-curl -i -X POST http://localhost:8080/api/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Demo User",
-    "email": "demo-user@example.com",
-    "password": "password123",
-    "skill": "Java Backend"
-  }'
-```
-
-Example response:
-
-```json
-{
-  "message": "Register successfully",
-  "data": {
-    "id": 2,
-    "name": "Demo User",
+    "accessToken": "<JWT_ACCESS_TOKEN>",
+    "refreshToken": "<OPAQUE_REFRESH_TOKEN>",
+    "tokenType": "Bearer",
+    "userId": 1,
     "email": "demo-user@example.com",
     "role": "USER"
   }
 }
 ```
 
-Save the returned user id for the next steps.
+Use the access token with:
 
-### 6. Login as normal user and save the JWT token
+```http
+Authorization: Bearer <JWT_ACCESS_TOKEN>
+```
+
+Refresh:
 
 ```bash
-curl -i -X POST http://localhost:8080/api/auth/login \
+curl -X POST http://localhost:8080/api/auth/refresh \
   -H "Content-Type: application/json" \
   -d '{
-    "email": "demo-user@example.com",
-    "password": "password123"
+    "refreshToken": "<OPAQUE_REFRESH_TOKEN>"
   }'
 ```
 
-Save the returned token:
+---
 
-```bash
-USER_TOKEN="<USER_JWT_TOKEN>"
-```
-
-### 7. Add product to cart
-
-Replace `{userId}` and `{productId}` with the ids returned from the previous steps.
-
-`POST /api/users/{userId}/cart/items` requires a JWT token belonging to the same user, or an ADMIN token.
-
-```bash
-curl -i -X POST http://localhost:8080/api/users/{userId}/cart/items \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $USER_TOKEN" \
-  -d '{
-    "productId": {productId},
-    "quantity": 1
-  }'
-```
-
-Expected result:
-
-```json
-{
-  "message": "Cart item added successfully"
-}
-```
-
-### 8. Create an order from cart
-
-```bash
-curl -i -X POST http://localhost:8080/api/users/{userId}/orders \
-  -H "Authorization: Bearer $USER_TOKEN"
-```
-
-Expected result:
-
-```json
-{
-  "message": "Order created successfully",
-  "data": {
-    "id": 1,
-    "status": "PENDING",
-    "totalAmount": 89999
-  }
-}
-```
-
-After this step:
-
-- The order is created with status `PENDING`
-- Product stock is deducted
-- An `ORDER_CREATED` outbox event is persisted and later published to Kafka by the Outbox Publisher
-
-Save the returned order id.
-
-### 9. Pay the order
-
-Replace `{orderId}` with the actual order id.
-
-```bash
-curl -i -X POST http://localhost:8080/api/orders/{orderId}/payments \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $USER_TOKEN" \
-  -H "Idempotency-Key: pay-order-{orderId}-001" \
-  -d '{
-    "method": "CREDIT_CARD"
-  }'
-```
-
-Expected result:
-
-```json
-{
-  "message": "Payment completed successfully",
-  "data": {
-    "status": "PAID",
-    "method": "CREDIT_CARD"
-  }
-}
-```
-
-After this step:
-
-- The payment is created
-- The order status becomes `PAID`
-- A `PAYMENT_PAID` outbox event is persisted and later published to Kafka by the Outbox Publisher
-
-### 10. Verify payment idempotency
-
-Run the same payment request again with the same `Idempotency-Key`:
-
-```bash
-curl -i -X POST http://localhost:8080/api/orders/{orderId}/payments \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $USER_TOKEN" \
-  -H "Idempotency-Key: pay-order-{orderId}-001" \
-  -d '{
-    "method": "CREDIT_CARD"
-  }'
-```
-
-Expected behavior:
+## Project Structure
 
 ```text
-The API returns the existing payment result instead of creating a duplicate payment.
+src/main/java/com/ravan/SpringBootLab
+├── controller
+├── service
+├── repository
+├── model
+├── dto
+├── security
+└── config
+
+src/main/resources
+├── application.properties
+├── application-local.properties
+├── application-prod.properties
+└── db/migration
+
+observability
+├── prometheus
+├── grafana
+├── alertmanager
+└── secrets                 # ignored by Git
 ```
 
-This demonstrates payment idempotency, which is commonly used in real payment systems to prevent duplicate charges.
+---
 
-### 11. Verify USER ownership authorization
+## Engineering Concepts Practiced
 
-A normal USER token can only access its own cart, orders, and payments.
-
-For example, using a token from another user to access this user's cart should be rejected:
-
-```bash
-curl -i -X GET http://localhost:8080/api/users/{userId}/cart/items \
-  -H "Authorization: Bearer <OTHER_USER_JWT_TOKEN>"
-```
-
-Expected result:
-
-```text
-403 Forbidden
-```
-
-## Kafka Verification
-
-Check Kafka topic offsets:
-
-```bash
-docker exec -it spring_boot_lab_kafka /opt/kafka/bin/kafka-get-offsets.sh \
-  --bootstrap-server localhost:9092 \
-  --topic order-created
-```
-
-Read `order-created` events:
-
-```bash
-docker exec -it spring_boot_lab_kafka /opt/kafka/bin/kafka-console-consumer.sh \
-  --bootstrap-server localhost:9092 \
-  --topic order-created \
-  --partition 0 \
-  --offset earliest \
-  --timeout-ms 5000
-```
-
-Read `payment-paid` events:
-
-```bash
-docker exec -it spring_boot_lab_kafka /opt/kafka/bin/kafka-console-consumer.sh \
-  --bootstrap-server localhost:9092 \
-  --topic payment-paid \
-  --partition 0 \
-  --offset earliest \
-  --timeout-ms 5000
-```
-
-Expected Spring Boot logs:
-
-```text
-Sent outbox event: eventId=<UUID>, topic=order-created, partition=0, offset=0
-Recorded order event audit: eventId=<UUID>, eventType=ORDER_CREATED
-Consumed OrderCreatedEvent: {...}
-```
-
-```text
-Sent outbox event: eventId=<UUID>, topic=payment-paid, partition=0, offset=0
-Consumed PaymentPaidEvent: {...}
-```
-
-## Key Backend Concepts Practiced
-
-- RESTful API design
-- Layered architecture
-- JWT authentication
-- Role-based authorization
-- User ownership authorization
+- REST API design and layered architecture
+- JWT authorization and ownership checks
+- Refresh-token rotation, revocation, and session management
+- Audit logging and security-event monitoring
 - BCrypt password hashing
-- Transaction management
-- JPA entity relationships
-- Flyway database migration
-- Schema versioning
+- PostgreSQL transactions and Flyway migrations
 - Optimistic locking
-- Stock consistency
 - Payment idempotency
 - Redis caching
 - Kafka event-driven architecture
+- Retry topics and dead-letter topics
 - Transactional Outbox pattern
-- Dual-write consistency mitigation
-- Outbox retry limit and failed-event governance
-- Operational replay for failed events
-- Kafka non-blocking retry topics
-- Dead-letter topic handling
-- Exponential retry backoff
-- Kafka retry / DLT integration testing
-- Consumer groups
-- Dockerized infrastructure
-- Testcontainers-based integration testing
-- Self-contained integration tests
-- Global exception handling
-- Structured logging
-- Service health checks
-- Liveness and readiness checks
-- Multi-instance-safe event claiming with SKIP LOCKED
-- Processing leases and expired-lease recovery
+- Multi-instance event processing with `SKIP LOCKED`
+- Lease recovery
+- At-least-once delivery and consumer idempotency
 - Micrometer custom metrics
-- Prometheus scraping and PromQL
-- Grafana dashboard provisioning
-- Failure recovery observability
-- Kafka at-least-once delivery semantics
-- Consumer idempotency with event headers
-- Transactional deduplication markers
-- Auditable consumer-side business effects
+- PromQL, Grafana provisioning, alert rules, Alertmanager routing
+- Incident lifecycle validation
+- Docker Compose infrastructure
+- Testcontainers integration testing
+- GitHub Actions CI
 
-## Completed Engineering Improvements
-
-- Added GitHub Actions CI pipeline
-- Added Product API integration tests
-- Added Payment Idempotency integration tests
-- Added Auth integration tests
-- Added Product ADMIN authorization integration tests
-- Added USER ownership authorization for cart, order, and payment APIs
-- Added JWT authentication and role-based authorization
-- Added Dockerfile for the Spring Boot application
-- Added Docker Compose full-stack runtime
-- Added Spring Boot Actuator health and info endpoints
-- Added Flyway database migration with schema validation
-- Added Testcontainers-based integration test infrastructure
-- Added self-contained integration tests for PostgreSQL, Redis, and Kafka
-- Added Kafka retry and dead-letter topic handling
-- Added exponential retry backoff (1s → 2s → 4s)
-- Added manual DLT verification for malformed Kafka messages
-- Added Kafka retry and DLT integration test with Testcontainers
-- Added Transactional Outbox for order and payment events
-- Added scheduled outbox publisher with PENDING and PUBLISHED states
-- Added outbox retry counting, retry limit, and FAILED state handling
-- Added Outbox Publisher integration tests for successful and failed Kafka delivery
-- Added order and payment outbox persistence tests
-- Added ADMIN APIs to inspect FAILED events and replay them
-- Added ADMIN outbox authorization and replay integration tests
-- Added multi-instance-safe outbox claiming with PostgreSQL SKIP LOCKED
-- Added processing leases and expired-lease recovery
-- Added integration tests for exclusive claiming and lease recovery
-- Added Micrometer outbox gauges and counters
-- Added ADMIN authorization tests for Actuator outbox metrics
-- Added Prometheus scrape configuration and Grafana dashboard provisioning
-- Manually verified normal publication, Kafka outage, FAILED governance, ADMIN replay, and successful recovery
-- Added consumer idempotency using outbox-event-id Kafka headers and processed_events
-- Added rollback-safe consumer deduplication tests
-- Added real ORDER_CREATED audit side effect with order_event_audit
-- Added Kafka duplicate-delivery integration test proving one audit record per event
-- Updated full order flow and payment tests to use JWT ownership authorization
+---
 
 ## Future Improvements
 
-- Add refresh token and token revocation support
-- Add more unit tests and integration tests
-- Add deployment environment
-- Add performance testing
-- Add alert rules for sustained FAILED outbox events and publish failures
-- Add a public deployment environment with private observability networking
-- Add idempotency support for additional consumer side effects
-- Add retention cleanup jobs for processed_events and order_event_audit
+- Rate limiting and temporary account lockout for brute-force protection
+- Cloud deployment with private observability networking
+- CI/CD deployment pipeline
+- Load testing with k6 or Gatling and published latency metrics
+- Distributed tracing with OpenTelemetry and Tempo / Jaeger
+- Secret management, IAM, HTTPS, and production network policies
+- User-facing frontend or admin console
+- Retention cleanup for auth audit logs and expired refresh tokens
+
+---
 
 ## License
 
-This project is licensed under the MIT License.
+MIT License.
