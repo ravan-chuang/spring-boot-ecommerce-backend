@@ -1,0 +1,29 @@
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: discord-alerts
+  group_by:
+    - alertname
+    - service
+    - severity
+  group_wait: 10s
+  group_interval: 30s
+  repeat_interval: 4h
+
+receivers:
+  - name: discord-alerts
+    discord_configs:
+      - webhook_url_file: /etc/alertmanager/secrets/discord_webhook_url.txt
+        send_resolved: true
+        username: Spring Boot Alerts
+        title: >-
+          [{{ .Status | toUpper }}]
+          {{ range .Alerts }}{{ .Labels.alertname }}{{ end }}
+        message: >-
+          {{ range .Alerts }}
+          **Severity:** {{ .Labels.severity }}
+          **Service:** {{ .Labels.service }}
+          **Summary:** {{ .Annotations.summary }}
+          **Description:** {{ .Annotations.description }}
+          {{ end }}

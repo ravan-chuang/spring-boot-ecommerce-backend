@@ -1,0 +1,42 @@
+groups:
+  - name: spring-boot-outbox-alerts
+    rules:
+      - alert: OutboxFailedEvents
+        expr: outbox_events{status="FAILED"} > 0
+        for: 30s
+        labels:
+          severity: critical
+          service: spring-boot-ecommerce-backend
+        annotations:
+          summary: "Outbox contains failed events"
+          description: "There are {{ $value }} FAILED outbox event(s). Review /api/admin/outbox/failed and replay after fixing the incident."
+
+      - alert: OutboxPublishFailuresDetected
+        expr: increase(outbox_publish_failure_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+          service: spring-boot-ecommerce-backend
+        annotations:
+          summary: "Outbox publish failures detected"
+          description: "Kafka publish failures occurred during the last 5 minutes. Check Kafka availability and Outbox Publisher logs."
+
+      - alert: OutboxPendingBacklog
+        expr: outbox_events{status="PENDING"} > 0
+        for: 5m
+        labels:
+          severity: warning
+          service: spring-boot-ecommerce-backend
+        annotations:
+          summary: "Outbox pending backlog is not draining"
+          description: "There are {{ $value }} PENDING outbox event(s) for more than 5 minutes."
+
+      - alert: SpringBootApplicationDown
+        expr: up{job="spring-boot-ecommerce-backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: spring-boot-ecommerce-backend
+        annotations:
+          summary: "Spring Boot application target is down"
+          description: "Prometheus cannot scrape the Spring Boot application for more than 1 minute."
