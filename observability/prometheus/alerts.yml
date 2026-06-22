@@ -40,3 +40,15 @@ groups:
         annotations:
           summary: "Spring Boot application target is down"
           description: "Prometheus cannot scrape the Spring Boot application for more than 1 minute."
+
+  - name: spring-boot-auth-security-alerts
+    rules:
+      - alert: ExcessiveLoginFailures
+        expr: increase(auth_events_total{action="login",outcome="failure"}[5m]) >= 5
+        for: 1m
+        labels:
+          severity: warning
+          service: spring-boot-ecommerce-backend
+        annotations:
+          summary: "Excessive failed login attempts detected"
+          description: "{{ $value }} failed login attempts occurred during the last 5 minutes. Review auth_audit_logs for suspicious activity."
