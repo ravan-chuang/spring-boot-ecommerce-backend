@@ -2,9 +2,9 @@
 
 [![CI](https://github.com/ravan-chuang/spring-boot-ecommerce-backend/actions/workflows/ci.yml/badge.svg)](https://github.com/ravan-chuang/spring-boot-ecommerce-backend/actions/workflows/ci.yml)
 
-A production-oriented e-commerce backend built with Spring Boot, PostgreSQL, Redis, Kafka, JWT authentication, role-based authorization, user ownership checks, Flyway database migrations, Testcontainers-based integration tests, Kafka retry and dead-letter topic handling, transactional outbox failure governance and replay, multi-instance-safe event claiming, Prometheus metrics, Grafana dashboards, and Spring Boot Actuator health checks.
+A production-oriented e-commerce backend built with Spring Boot, PostgreSQL, Redis, Kafka, JWT authentication, role-based authorization, user ownership checks, Flyway database migrations, Testcontainers-based integration tests, Kafka retry and dead-letter topic handling, transactional outbox failure governance and replay, multi-instance-safe event claiming, Prometheus metrics, Grafana dashboards, consumer idempotency, and Spring Boot Actuator health checks.
 
-This project is not only a basic CRUD system. It focuses on backend engineering concepts such as transactional order processing, optimistic locking, payment idempotency, Redis caching, Kafka-based event-driven architecture, JWT authentication, ADMIN/USER authorization, user ownership checks, Flyway-managed schema versioning, self-contained integration testing with Testcontainers, Kafka retry and dead-letter topic handling, transactional outbox event publishing, failed-event replay, multi-instance-safe event processing, Prometheus/Grafana observability, and service health monitoring.
+This project is not only a basic CRUD system. It focuses on backend engineering concepts such as transactional order processing, optimistic locking, payment idempotency, Redis caching, Kafka-based event-driven architecture, JWT authentication, ADMIN/USER authorization, user ownership checks, Flyway-managed schema versioning, self-contained integration testing with Testcontainers, Kafka retry and dead-letter topic handling, transactional outbox event publishing, failed-event replay, multi-instance-safe event processing, Prometheus/Grafana observability, idempotent Kafka consumer processing, and service health monitoring.
 
 ## Tech Stack
 
@@ -42,6 +42,8 @@ This project is not only a basic CRUD system. It focuses on backend engineering 
 - Testcontainers-based integration tests for authentication, product authorization, user ownership, payment idempotency, full order flow, and Kafka retry / DLT handling
 - Kafka non-blocking retry and dead-letter topic handling for failed consumer messages
 - Transactional Outbox for reliable order and payment event publication
+- Idempotent Kafka consumer processing using `processed_events`
+- Auditable `ORDER_CREATED` consumer side effect using `order_event_audit`
 
 ### User and Product APIs
 
@@ -389,6 +391,8 @@ Additional schema migration:
 
 ```text
 src/main/resources/db/migration/V3__add_outbox_processing_lease.sql
+src/main/resources/db/migration/V4__create_processed_events.sql
+src/main/resources/db/migration/V5__create_order_event_audit.sql
 ```
 
 Additional outbox fields:
@@ -428,6 +432,74 @@ PROCESSING lease expires
 ```
 
 This implementation uses a short transactional claim step, then publishes to Kafka outside the database lock. It also includes integration coverage for exclusive claiming and expired-lease recovery.
+
+## Idempotent Kafka Consumers and Auditable Side Effects
+
+Kafka provides at-least-once delivery semantics, so a consumer can receive the same event more than once. This project prevents duplicate consumer side effects by carrying the Outbox event UUID in a Kafka header:
+
+```text
+outbox-event-id: <UUID>
+```
+
+The publisher attaches this header when it sends an outbox event. Each consumer uses the event ID together with its consumer name to deduplicate delivery attempts.
+
+Additional Flyway migrations:
+
+```text
+src/main/resources/db/migration/V4__create_processed_events.sql
+src/main/resources/db/migration/V5__create_order_event_audit.sql
+```
+
+### `processed_events`
+
+`processed_events` stores a unique marker for each event and consumer pair:
+
+```text
+(event_id, consumer_name)
+```
+
+Processing flow:
+
+```text
+Kafka event arrives
+→ consumer reads outbox-event-id header
+→ INSERT INTO processed_events
+→ first insert succeeds: execute business side effect
+→ duplicate insert conflicts: skip the duplicate event
+```
+
+The marker insertion and consumer business action run in the same database transaction:
+
+```text
+business action succeeds
+→ processed marker commits
+
+business action fails
+→ transaction rolls back
+→ processed marker is removed
+→ Kafka retry can process the event again
+```
+
+### `order_event_audit`
+
+The `ORDER_CREATED` consumer writes an auditable database side effect:
+
+```text
+order_event_audit
+```
+
+A single event ID can create only one audit record. This proves that duplicate Kafka delivery does not create duplicate business data.
+
+Verified behavior:
+
+```text
+same outbox-event-id delivered twice
+→ processed_events contains 1 row
+→ order_event_audit contains 1 row
+→ second delivery is skipped
+```
+
+Messages without the `outbox-event-id` header remain processable for backward compatibility, but they are logged as not deduplicated.
 
 ## Redis Cache
 
@@ -469,6 +541,8 @@ Database migrations include:
 src/main/resources/db/migration/V1__init_schema.sql
 src/main/resources/db/migration/V2__create_outbox_events.sql
 src/main/resources/db/migration/V3__add_outbox_processing_lease.sql
+src/main/resources/db/migration/V4__create_processed_events.sql
+src/main/resources/db/migration/V5__create_order_event_audit.sql
 ```
 
 Hibernate is configured to validate the schema instead of automatically updating it:
@@ -502,6 +576,8 @@ Expected result includes all schema migrations:
 1 | 1 | init schema | t
 2 | 2 | create outbox events | t
 3 | 3 | add outbox processing lease | t
+4 | 4 | create processed events | t
+5 | 5 | create order event audit | t
 ```
 
 ## Testcontainers Integration Testing
@@ -533,6 +609,18 @@ spring.kafka.bootstrap-servers
 
 This makes the test suite more reproducible and closer to a CI-friendly backend workflow.
 
+Additional event-driven integration coverage verifies:
+
+```text
+same Kafka event header delivered twice
+→ processed_events stores one marker
+→ order_event_audit stores one business side effect
+
+consumer business action throws
+→ processed marker rolls back
+→ a later retry can process the same event
+```
+
 Run all tests:
 
 ```bash
@@ -542,7 +630,7 @@ Run all tests:
 Expected result:
 
 ```text
-Tests run: 28, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 31, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 ```
 
@@ -577,6 +665,9 @@ flowchart TD
 
     OrderTopic --> OrderConsumer[OrderCreatedEvent Consumer]
     PaymentTopic --> PaymentConsumer[PaymentPaidEvent Consumer]
+
+    OrderConsumer --> ProcessedEvents[(processed_events)]
+    OrderConsumer --> OrderAudit[(order_event_audit)]
 
     OrderConsumer --> RetryTopic[Retry Topics]
     PaymentConsumer --> RetryTopic
@@ -1168,15 +1259,14 @@ docker exec -it spring_boot_lab_kafka /opt/kafka/bin/kafka-console-consumer.sh \
 Expected Spring Boot logs:
 
 ```text
-Sent OrderCreatedEvent: orderId=10, topic=order-created, partition=0, offset=0
-Received raw OrderCreatedEvent message: {...}
-Consumed OrderCreatedEvent: orderId=10, userId=1, totalAmount=89999.00
+Sent outbox event: eventId=<UUID>, topic=order-created, partition=0, offset=0
+Recorded order event audit: eventId=<UUID>, eventType=ORDER_CREATED
+Consumed OrderCreatedEvent: {...}
 ```
 
 ```text
-Sent PaymentPaidEvent: paymentId=7, orderId=10, topic=payment-paid, partition=0, offset=0
-Received raw PaymentPaidEvent message: {...}
-Consumed PaymentPaidEvent: paymentId=7, orderId=10, amount=89999.00, method=CREDIT_CARD
+Sent outbox event: eventId=<UUID>, topic=payment-paid, partition=0, offset=0
+Consumed PaymentPaidEvent: {...}
 ```
 
 ## Key Backend Concepts Practiced
@@ -1218,6 +1308,10 @@ Consumed PaymentPaidEvent: paymentId=7, orderId=10, amount=89999.00, method=CRED
 - Prometheus scraping and PromQL
 - Grafana dashboard provisioning
 - Failure recovery observability
+- Kafka at-least-once delivery semantics
+- Consumer idempotency with event headers
+- Transactional deduplication markers
+- Auditable consumer-side business effects
 
 ## Completed Engineering Improvements
 
@@ -1252,6 +1346,10 @@ Consumed PaymentPaidEvent: paymentId=7, orderId=10, amount=89999.00, method=CRED
 - Added ADMIN authorization tests for Actuator outbox metrics
 - Added Prometheus scrape configuration and Grafana dashboard provisioning
 - Manually verified normal publication, Kafka outage, FAILED governance, ADMIN replay, and successful recovery
+- Added consumer idempotency using outbox-event-id Kafka headers and processed_events
+- Added rollback-safe consumer deduplication tests
+- Added real ORDER_CREATED audit side effect with order_event_audit
+- Added Kafka duplicate-delivery integration test proving one audit record per event
 - Updated full order flow and payment tests to use JWT ownership authorization
 
 ## Future Improvements
@@ -1262,7 +1360,8 @@ Consumed PaymentPaidEvent: paymentId=7, orderId=10, amount=89999.00, method=CRED
 - Add performance testing
 - Add alert rules for sustained FAILED outbox events and publish failures
 - Add a public deployment environment with private observability networking
-- Add consumer-side idempotency for at-least-once event delivery
+- Add idempotency support for additional consumer side effects
+- Add retention cleanup jobs for processed_events and order_event_audit
 
 ## License
 
