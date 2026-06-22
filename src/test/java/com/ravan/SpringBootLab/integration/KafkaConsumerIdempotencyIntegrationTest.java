@@ -29,12 +29,14 @@ class KafkaConsumerIdempotencyIntegrationTest
     private JdbcTemplate jdbcTemplate;
 
     @BeforeEach
-    void clearProcessedEvents() {
+    void clearEventState() {
+        jdbcTemplate.update("DELETE FROM order_event_audit");
         jdbcTemplate.update("DELETE FROM processed_events");
     }
 
     @Test
-    void shouldProcessDuplicateKafkaEventOnlyOnce() throws Exception {
+    void shouldCreateOnlyOneAuditRecordForDuplicateKafkaEvent()
+            throws Exception {
         UUID eventId = UUID.randomUUID();
         String consumerName = "order-created-consumer";
         String key = "idempotency-test-" + eventId;
@@ -66,7 +68,18 @@ class KafkaConsumerIdempotencyIntegrationTest
                 consumerName
         );
 
+        Integer auditCount = jdbcTemplate.queryForObject(
+                """
+                SELECT COUNT(*)
+                FROM order_event_audit
+                WHERE event_id = ?
+                """,
+                Integer.class,
+                eventId
+        );
+
         assertEquals(1, processedCount);
+        assertEquals(1, auditCount);
     }
 
     private void sendOrderCreatedEvent(
@@ -109,7 +122,20 @@ class KafkaConsumerIdempotencyIntegrationTest
                     consumerName
             );
 
-            if (processedCount != null && processedCount == 1) {
+            Integer auditCount = jdbcTemplate.queryForObject(
+                    """
+                    SELECT COUNT(*)
+                    FROM order_event_audit
+                    WHERE event_id = ?
+                    """,
+                    Integer.class,
+                    eventId
+            );
+
+            if (processedCount != null
+                    && processedCount == 1
+                    && auditCount != null
+                    && auditCount == 1) {
                 return;
             }
 
@@ -117,7 +143,7 @@ class KafkaConsumerIdempotencyIntegrationTest
         }
 
         throw new AssertionError(
-                "Timed out waiting for Kafka consumer to process event: "
+                "Timed out waiting for Kafka consumer side effect: "
                         + eventId
         );
     }

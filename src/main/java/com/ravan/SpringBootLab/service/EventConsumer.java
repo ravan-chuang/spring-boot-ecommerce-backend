@@ -13,6 +13,7 @@ import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 @Component
 public class EventConsumer {
@@ -27,9 +28,14 @@ public class EventConsumer {
             "payment-paid-consumer";
 
     private final ProcessedEventService processedEventService;
+    private final OrderEventAuditService orderEventAuditService;
 
-    public EventConsumer(ProcessedEventService processedEventService) {
+    public EventConsumer(
+            ProcessedEventService processedEventService,
+            OrderEventAuditService orderEventAuditService
+    ) {
         this.processedEventService = processedEventService;
+        this.orderEventAuditService = orderEventAuditService;
     }
 
     @RetryableTopic(
@@ -52,7 +58,10 @@ public class EventConsumer {
         processWithIdempotency(
                 record,
                 ORDER_CREATED_CONSUMER,
-                () -> processOrderCreatedEvent(record.value())
+                eventId -> processOrderCreatedEvent(
+                        eventId,
+                        record.value()
+                )
         );
     }
 
@@ -76,7 +85,7 @@ public class EventConsumer {
         processWithIdempotency(
                 record,
                 PAYMENT_PAID_CONSUMER,
-                () -> processPaymentPaidEvent(record.value())
+                eventId -> processPaymentPaidEvent(record.value())
         );
     }
 
@@ -97,7 +106,7 @@ public class EventConsumer {
     private void processWithIdempotency(
             ConsumerRecord<String, String> record,
             String consumerName,
-            Runnable businessAction
+            Consumer<UUID> businessAction
     ) {
         UUID eventId = extractOutboxEventId(record);
 
@@ -108,14 +117,14 @@ public class EventConsumer {
                     record.offset()
             );
 
-            businessAction.run();
+            businessAction.accept(null);
             return;
         }
 
         processedEventService.processIfFirstTime(
                 eventId,
                 consumerName,
-                businessAction
+                () -> businessAction.accept(eventId)
         );
     }
 
@@ -145,10 +154,20 @@ public class EventConsumer {
         }
     }
 
-    private void processOrderCreatedEvent(String message) {
+    private void processOrderCreatedEvent(
+            UUID eventId,
+            String message
+    ) {
         if (message == null || message.isBlank()) {
             throw new IllegalArgumentException(
                     "OrderCreatedEvent message is empty"
+            );
+        }
+
+        if (eventId != null) {
+            orderEventAuditService.recordOrderCreatedEvent(
+                    eventId,
+                    message
             );
         }
 
