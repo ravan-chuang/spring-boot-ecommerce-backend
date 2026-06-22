@@ -109,15 +109,19 @@ public class RefreshTokenService {
     }
 
     @Transactional
-    public void revoke(String rawToken) {
+    public User revoke(String rawToken) {
         RefreshToken refreshToken = refreshTokenRepository
                 .findByTokenHashForUpdate(hash(rawToken))
                 .orElseThrow(this::invalidRefreshToken);
+
+        User user = refreshToken.getUser();
 
         if (refreshToken.getRevokedAt() == null) {
             refreshToken.revoke(null);
             refreshTokenRepository.save(refreshToken);
         }
+
+        return user;
     }
 
     @Transactional(readOnly = true)

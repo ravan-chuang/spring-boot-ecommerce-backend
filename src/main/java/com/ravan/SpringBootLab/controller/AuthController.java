@@ -11,7 +11,6 @@ import com.ravan.SpringBootLab.dto.RegisterRequest;
 import com.ravan.SpringBootLab.model.User;
 import com.ravan.SpringBootLab.security.CurrentUserService;
 import com.ravan.SpringBootLab.service.AuthService;
-import com.ravan.SpringBootLab.service.RefreshTokenService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
@@ -29,29 +28,23 @@ import java.util.UUID;
 
 @Tag(
         name = "Auth API",
-        description = "Register, login, refresh-token, logout, and session management APIs"
+        description = "Authentication, refresh-token, logout, and session management APIs"
 )
 @RestController
 public class AuthController {
 
     private final AuthService authService;
-    private final RefreshTokenService refreshTokenService;
     private final CurrentUserService currentUserService;
 
     public AuthController(
             AuthService authService,
-            RefreshTokenService refreshTokenService,
             CurrentUserService currentUserService
     ) {
         this.authService = authService;
-        this.refreshTokenService = refreshTokenService;
         this.currentUserService = currentUserService;
     }
 
-    @Operation(
-            summary = "Register",
-            description = "Register a new user and return access and refresh tokens"
-    )
+    @Operation(summary = "Register")
     @PostMapping("/api/auth/register")
     public ResponseEntity<ApiResponse<AuthResponse>> register(
             @Valid @RequestBody RegisterRequest request,
@@ -70,10 +63,7 @@ public class AuthController {
         );
     }
 
-    @Operation(
-            summary = "Login",
-            description = "Login and return access and refresh tokens"
-    )
+    @Operation(summary = "Login")
     @PostMapping("/api/auth/login")
     public ResponseEntity<ApiResponse<AuthResponse>> login(
             @Valid @RequestBody LoginRequest request,
@@ -92,10 +82,7 @@ public class AuthController {
         );
     }
 
-    @Operation(
-            summary = "Refresh access token",
-            description = "Rotate the refresh token and return a new access token and refresh token"
-    )
+    @Operation(summary = "Refresh access token")
     @PostMapping("/api/auth/refresh")
     public ResponseEntity<ApiResponse<AuthResponse>> refresh(
             @Valid @RequestBody RefreshTokenRequest request,
@@ -114,15 +101,17 @@ public class AuthController {
         );
     }
 
-    @Operation(
-            summary = "Logout",
-            description = "Revoke the supplied refresh token"
-    )
+    @Operation(summary = "Logout")
     @PostMapping("/api/auth/logout")
     public ResponseEntity<ApiResponse<Void>> logout(
-            @Valid @RequestBody LogoutRequest request
+            @Valid @RequestBody LogoutRequest request,
+            HttpServletRequest httpRequest
     ) {
-        authService.logout(request);
+        authService.logout(
+                request,
+                deviceName(httpRequest),
+                clientIp(httpRequest)
+        );
 
         return ResponseEntity.ok(
                 new ApiResponse<>(
@@ -133,10 +122,7 @@ public class AuthController {
         );
     }
 
-    @Operation(
-            summary = "List active sessions",
-            description = "Return active refresh-token sessions for the current user"
-    )
+    @Operation(summary = "List active sessions")
     @GetMapping("/api/auth/sessions")
     public ResponseEntity<ApiResponse<List<AuthSessionResponse>>> listSessions() {
         User currentUser = currentUserService.getCurrentUser();
@@ -145,21 +131,25 @@ public class AuthController {
                 new ApiResponse<>(
                         200,
                         "Active sessions retrieved successfully",
-                        refreshTokenService.listActiveSessions(currentUser)
+                        authService.listActiveSessions(currentUser)
                 )
         );
     }
 
-    @Operation(
-            summary = "Logout a session",
-            description = "Revoke one active refresh-token session owned by the current user"
-    )
+    @Operation(summary = "Logout one session")
     @DeleteMapping("/api/auth/sessions/{sessionId}")
     public ResponseEntity<ApiResponse<Void>> logoutSession(
-            @PathVariable UUID sessionId
+            @PathVariable UUID sessionId,
+            HttpServletRequest httpRequest
     ) {
         User currentUser = currentUserService.getCurrentUser();
-        refreshTokenService.revokeSession(currentUser, sessionId);
+
+        authService.revokeSession(
+                currentUser,
+                sessionId,
+                deviceName(httpRequest),
+                clientIp(httpRequest)
+        );
 
         return ResponseEntity.ok(
                 new ApiResponse<>(
@@ -170,22 +160,24 @@ public class AuthController {
         );
     }
 
-    @Operation(
-            summary = "Logout all sessions",
-            description = "Revoke all active refresh-token sessions for the current user"
-    )
+    @Operation(summary = "Logout all sessions")
     @PostMapping("/api/auth/sessions/logout-all")
-    public ResponseEntity<ApiResponse<LogoutAllSessionsResponse>> logoutAllSessions() {
+    public ResponseEntity<ApiResponse<LogoutAllSessionsResponse>> logoutAllSessions(
+            HttpServletRequest httpRequest
+    ) {
         User currentUser = currentUserService.getCurrentUser();
 
-        int revokedSessionCount =
-                refreshTokenService.revokeAllSessions(currentUser);
+        int revokedCount = authService.revokeAllSessions(
+                currentUser,
+                deviceName(httpRequest),
+                clientIp(httpRequest)
+        );
 
         return ResponseEntity.ok(
                 new ApiResponse<>(
                         200,
                         "All sessions logged out successfully",
-                        new LogoutAllSessionsResponse(revokedSessionCount)
+                        new LogoutAllSessionsResponse(revokedCount)
                 )
         );
     }
