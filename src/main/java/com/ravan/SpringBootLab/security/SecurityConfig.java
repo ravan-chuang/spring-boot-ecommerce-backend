@@ -29,6 +29,7 @@ public class SecurityConfig {
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/api/auth/sessions/**").authenticated()
                         .requestMatchers(
                                 "/api/auth/**",
                                 "/swagger-ui.html",
@@ -38,6 +39,7 @@ public class SecurityConfig {
                                 "/actuator/info"
                         ).permitAll()
 
+                        .requestMatchers("/actuator/prometheus").permitAll()
                         .requestMatchers("/actuator/metrics/**").hasRole("ADMIN")
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
 

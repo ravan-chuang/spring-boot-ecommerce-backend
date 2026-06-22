@@ -1,5 +1,6 @@
 package com.ravan.SpringBootLab.service;
 
+import com.ravan.SpringBootLab.dto.AuthSessionResponse;
 import com.ravan.SpringBootLab.model.RefreshToken;
 import com.ravan.SpringBootLab.model.User;
 import com.ravan.SpringBootLab.repository.RefreshTokenRepository;
@@ -15,6 +16,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -35,12 +37,24 @@ public class RefreshTokenService {
 
     @Transactional
     public String issue(User user) {
+        return issue(user, "Unknown device", null);
+    }
+
+    @Transactional
+    public String issue(
+            User user,
+            String deviceName,
+            String ipAddress
+    ) {
         String rawToken = generateRawToken();
 
         RefreshToken refreshToken = new RefreshToken(
                 user,
                 hash(rawToken),
-                Instant.now().plusSeconds(expirationDays * 24 * 60 * 60)
+                expiresAt(),
+                UUID.randomUUID(),
+                normalizeDeviceName(deviceName),
+                normalizeIpAddress(ipAddress)
         );
 
         refreshTokenRepository.save(refreshToken);
@@ -50,6 +64,15 @@ public class RefreshTokenService {
 
     @Transactional
     public RefreshTokenRotation rotate(String rawToken) {
+        return rotate(rawToken, null, null);
+    }
+
+    @Transactional
+    public RefreshTokenRotation rotate(
+            String rawToken,
+            String deviceName,
+            String ipAddress
+    ) {
         RefreshToken currentToken = refreshTokenRepository
                 .findByTokenHashForUpdate(hash(rawToken))
                 .orElseThrow(this::invalidRefreshToken);
@@ -58,21 +81,31 @@ public class RefreshTokenService {
             throw invalidRefreshToken();
         }
 
-        User user = currentToken.getUser();
-
         String newRawToken = generateRawToken();
+
         RefreshToken replacementToken = new RefreshToken(
-                user,
+                currentToken.getUser(),
                 hash(newRawToken),
-                Instant.now().plusSeconds(expirationDays * 24 * 60 * 60)
+                expiresAt(),
+                currentToken.getSessionId(),
+                hasText(deviceName)
+                        ? normalizeDeviceName(deviceName)
+                        : currentToken.getDeviceName(),
+                hasText(ipAddress)
+                        ? normalizeIpAddress(ipAddress)
+                        : currentToken.getIpAddress()
         );
 
         refreshTokenRepository.save(replacementToken);
 
+        currentToken.markUsed();
         currentToken.revoke(replacementToken.getId());
         refreshTokenRepository.save(currentToken);
 
-        return new RefreshTokenRotation(user, newRawToken);
+        return new RefreshTokenRotation(
+                currentToken.getUser(),
+                newRawToken
+        );
     }
 
     @Transactional
@@ -85,6 +118,49 @@ public class RefreshTokenService {
             refreshToken.revoke(null);
             refreshTokenRepository.save(refreshToken);
         }
+    }
+
+    @Transactional(readOnly = true)
+    public List<AuthSessionResponse> listActiveSessions(User user) {
+        return refreshTokenRepository.findActiveByUserId(user.getId())
+                .stream()
+                .map(token -> new AuthSessionResponse(
+                        token.getSessionId(),
+                        token.getDeviceName(),
+                        token.getIpAddress(),
+                        token.getCreatedAt(),
+                        token.getLastUsedAt(),
+                        token.getExpiresAt()
+                ))
+                .toList();
+    }
+
+    @Transactional
+    public void revokeSession(User user, UUID sessionId) {
+        int revokedCount = refreshTokenRepository.revokeActiveSession(
+                user.getId(),
+                sessionId,
+                Instant.now()
+        );
+
+        if (revokedCount == 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND,
+                    "Active session not found"
+            );
+        }
+    }
+
+    @Transactional
+    public int revokeAllSessions(User user) {
+        return refreshTokenRepository.revokeAllActiveSessions(
+                user.getId(),
+                Instant.now()
+        );
+    }
+
+    private Instant expiresAt() {
+        return Instant.now().plusSeconds(expirationDays * 24 * 60 * 60);
     }
 
     private String generateRawToken() {
@@ -109,8 +185,33 @@ public class RefreshTokenService {
 
             return result.toString();
         } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 algorithm is unavailable", exception);
+            throw new IllegalStateException(
+                    "SHA-256 algorithm is unavailable",
+                    exception
+            );
         }
+    }
+
+    private String normalizeDeviceName(String deviceName) {
+        if (!hasText(deviceName)) {
+            return "Unknown device";
+        }
+
+        return deviceName.trim()
+                .substring(0, Math.min(deviceName.trim().length(), 255));
+    }
+
+    private String normalizeIpAddress(String ipAddress) {
+        if (!hasText(ipAddress)) {
+            return null;
+        }
+
+        return ipAddress.trim()
+                .substring(0, Math.min(ipAddress.trim().length(), 64));
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 
     private ResponseStatusException invalidRefreshToken() {

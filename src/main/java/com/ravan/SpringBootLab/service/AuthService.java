@@ -36,6 +36,15 @@ public class AuthService {
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
+        return register(request, "Unknown device", null);
+    }
+
+    @Transactional
+    public AuthResponse register(
+            RegisterRequest request,
+            String deviceName,
+            String ipAddress
+    ) {
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
@@ -55,12 +64,21 @@ public class AuthService {
 
         return createAuthResponse(
                 savedUser,
-                refreshTokenService.issue(savedUser)
+                refreshTokenService.issue(savedUser, deviceName, ipAddress)
         );
     }
 
     @Transactional
     public AuthResponse login(LoginRequest request) {
+        return login(request, "Unknown device", null);
+    }
+
+    @Transactional
+    public AuthResponse login(
+            LoginRequest request,
+            String deviceName,
+            String ipAddress
+    ) {
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.UNAUTHORIZED,
@@ -80,14 +98,27 @@ public class AuthService {
 
         return createAuthResponse(
                 user,
-                refreshTokenService.issue(user)
+                refreshTokenService.issue(user, deviceName, ipAddress)
         );
     }
 
     @Transactional
     public AuthResponse refresh(RefreshTokenRequest request) {
+        return refresh(request, null, null);
+    }
+
+    @Transactional
+    public AuthResponse refresh(
+            RefreshTokenRequest request,
+            String deviceName,
+            String ipAddress
+    ) {
         RefreshTokenService.RefreshTokenRotation rotation =
-                refreshTokenService.rotate(request.refreshToken());
+                refreshTokenService.rotate(
+                        request.refreshToken(),
+                        deviceName,
+                        ipAddress
+                );
 
         return createAuthResponse(
                 rotation.user(),

@@ -25,6 +25,15 @@ public class RefreshToken {
     @Column(name = "token_hash", nullable = false, unique = true, length = 64)
     private String tokenHash;
 
+    @Column(name = "session_id", nullable = false)
+    private UUID sessionId;
+
+    @Column(name = "device_name", nullable = false, length = 255)
+    private String deviceName;
+
+    @Column(name = "ip_address", length = 64)
+    private String ipAddress;
+
     @Column(name = "expires_at", nullable = false)
     private Instant expiresAt;
 
@@ -37,19 +46,50 @@ public class RefreshToken {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
+    @Column(name = "last_used_at", nullable = false)
+    private Instant lastUsedAt;
+
     public RefreshToken() {
     }
 
     public RefreshToken(User user, String tokenHash, Instant expiresAt) {
+        this(
+                user,
+                tokenHash,
+                expiresAt,
+                UUID.randomUUID(),
+                "Unknown device",
+                null
+        );
+    }
+
+    public RefreshToken(
+            User user,
+            String tokenHash,
+            Instant expiresAt,
+            UUID sessionId,
+            String deviceName,
+            String ipAddress
+    ) {
+        Instant now = Instant.now();
+
         this.id = UUID.randomUUID();
         this.user = user;
         this.tokenHash = tokenHash;
         this.expiresAt = expiresAt;
-        this.createdAt = Instant.now();
+        this.sessionId = sessionId;
+        this.deviceName = deviceName;
+        this.ipAddress = ipAddress;
+        this.createdAt = now;
+        this.lastUsedAt = now;
     }
 
     public boolean isActive(Instant now) {
         return revokedAt == null && expiresAt.isAfter(now);
+    }
+
+    public void markUsed() {
+        this.lastUsedAt = Instant.now();
     }
 
     public void revoke(UUID replacementTokenId) {
@@ -69,6 +109,18 @@ public class RefreshToken {
         return tokenHash;
     }
 
+    public UUID getSessionId() {
+        return sessionId;
+    }
+
+    public String getDeviceName() {
+        return deviceName;
+    }
+
+    public String getIpAddress() {
+        return ipAddress;
+    }
+
     public Instant getExpiresAt() {
         return expiresAt;
     }
@@ -83,5 +135,9 @@ public class RefreshToken {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public Instant getLastUsedAt() {
+        return lastUsedAt;
     }
 }

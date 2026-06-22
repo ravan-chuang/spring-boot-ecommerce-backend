@@ -14,8 +14,11 @@ import org.springframework.test.web.servlet.MvcResult;
 import java.util.UUID;
 
 import static org.hamcrest.Matchers.blankOrNullString;
+import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.not;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -166,6 +169,64 @@ class AuthControllerIntegrationTest extends TestcontainersIntegrationTest {
                 .andExpect(status().isUnauthorized());
     }
 
+    @Test
+    void shouldListAndRevokeOneOwnedSession() throws Exception {
+        String email = "session-test-" + UUID.randomUUID() + "@example.com";
+
+        TokenPair firstDevice = registerAndGetTokens(email, "password123");
+        TokenPair secondDevice = loginAndGetTokens(email, "password123");
+
+        MvcResult sessionsResult = mockMvc.perform(get("/api/auth/sessions")
+                        .header("Authorization", bearer(firstDevice.accessToken())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message")
+                        .value("Active sessions retrieved successfully"))
+                .andExpect(jsonPath("$.data", hasSize(2)))
+                .andReturn();
+
+        JsonNode sessions = objectMapper
+                .readTree(sessionsResult.getResponse().getContentAsString())
+                .path("data");
+
+        String sessionIdToRevoke = sessions.get(0).path("sessionId").asText();
+
+        mockMvc.perform(delete("/api/auth/sessions/{sessionId}", sessionIdToRevoke)
+                        .header("Authorization", bearer(firstDevice.accessToken())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message")
+                        .value("Session logged out successfully"));
+
+        mockMvc.perform(get("/api/auth/sessions")
+                        .header("Authorization", bearer(secondDevice.accessToken())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data", hasSize(1)));
+    }
+
+    @Test
+    void shouldRevokeAllSessionsForCurrentUser() throws Exception {
+        String email = "logout-all-test-" + UUID.randomUUID() + "@example.com";
+
+        TokenPair firstDevice = registerAndGetTokens(email, "password123");
+        TokenPair secondDevice = loginAndGetTokens(email, "password123");
+
+        mockMvc.perform(post("/api/auth/sessions/logout-all")
+                        .header("Authorization", bearer(firstDevice.accessToken())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message")
+                        .value("All sessions logged out successfully"))
+                .andExpect(jsonPath("$.data.revokedSessionCount").value(2));
+
+        mockMvc.perform(post("/api/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(refreshRequest(firstDevice.refreshToken())))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(post("/api/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(refreshRequest(secondDevice.refreshToken())))
+                .andExpect(status().isUnauthorized());
+    }
+
     private void registerUser(String email, String password) throws Exception {
         String registerJson = """
                 {
@@ -197,7 +258,31 @@ class AuthControllerIntegrationTest extends TestcontainersIntegrationTest {
 
         MvcResult result = mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
+                        .header("User-Agent", "Test Browser / Device A")
                         .content(registerJson))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.accessToken", not(blankOrNullString())))
+                .andExpect(jsonPath("$.data.refreshToken", not(blankOrNullString())))
+                .andReturn();
+
+        return extractTokens(result);
+    }
+
+    private TokenPair loginAndGetTokens(
+            String email,
+            String password
+    ) throws Exception {
+        String loginJson = """
+                {
+                  "email": "%s",
+                  "password": "%s"
+                }
+                """.formatted(email, password);
+
+        MvcResult result = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("User-Agent", "Test Browser / Device B")
+                        .content(loginJson))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.accessToken", not(blankOrNullString())))
                 .andExpect(jsonPath("$.data.refreshToken", not(blankOrNullString())))
@@ -223,6 +308,10 @@ class AuthControllerIntegrationTest extends TestcontainersIntegrationTest {
                   "refreshToken": "%s"
                 }
                 """.formatted(refreshToken);
+    }
+
+    private String bearer(String accessToken) {
+        return "Bearer " + accessToken;
     }
 
     private record TokenPair(
