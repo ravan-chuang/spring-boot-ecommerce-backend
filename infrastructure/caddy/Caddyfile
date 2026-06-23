@@ -1,3 +1,6 @@
 {$CADDY_SITE_ADDRESS:http://localhost} {
+    @private_actuator path /actuator/prometheus /actuator/metrics*
+    respond @private_actuator 404
+
     reverse_proxy app:8080
 }
