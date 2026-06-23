@@ -50,3 +50,17 @@ logs/
 *.tmp
 *.swp
 observability/secrets/
+
+# Production runtime files
+.env.production
+.env.prod
+.env.local
+.env.*.local
+
+# Local observability state
+prometheus_data/
+grafana_data/
+alertmanager_data/
+
+# Keep the safe environment-variable template in Git
+!.env.example
