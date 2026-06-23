@@ -22,6 +22,8 @@ This is intentionally more than a CRUD project. It demonstrates how a backend ha
 - Testcontainers integration tests for PostgreSQL, Redis, and Kafka
 - Docker Compose full-stack local runtime
 - Spring profiles for local, production, and test environments
+- Caddy reverse proxy with production-style private service networking
+- Temporary public demo workflow through Cloudflare Quick Tunnel
 
 ---
 
@@ -44,7 +46,8 @@ This is intentionally more than a CRUD project. It demonstrates how a backend ha
 
 ```mermaid
 flowchart TD
-    Client[Client / Swagger / curl] --> API[Spring Boot REST API]
+    Client[Browser / Swagger / curl] --> Caddy[Caddy Reverse Proxy :80 / :443]
+    Caddy --> API[Spring Boot REST API]
     API --> Security[Spring Security + JWT]
     Security --> Auth[Auth / Session Services]
     Auth --> Users[(users)]
@@ -69,6 +72,16 @@ flowchart TD
     Prometheus --> Grafana[Grafana]
     Prometheus --> Alertmanager[Alertmanager]
     Alertmanager --> Discord[Discord #backend-alerts]
+
+    subgraph Private Docker Network
+      API
+      PostgreSQL
+      Redis
+      Kafka
+      Prometheus
+      Grafana
+      Alertmanager
+    end
 ```
 
 ---
@@ -529,12 +542,23 @@ Failed login × 5
 
 ### Local observability URLs
 
+Development Compose mode exposes the following host ports:
+
 ```text
 Swagger UI:     http://localhost:8080/swagger-ui/index.html
 Prometheus:     http://localhost:9090
 Grafana:        http://localhost:3000
 Alertmanager:   http://localhost:9093
 ```
+
+With the production Compose overlay, access the API and Swagger through Caddy instead:
+
+```text
+Health:         http://localhost/actuator/health
+Swagger UI:     http://localhost/swagger-ui/index.html
+```
+
+Prometheus, Grafana, and Alertmanager remain private in the production-style stack.
 
 Local Grafana credentials:
 
@@ -544,6 +568,130 @@ password: admin
 ```
 
 For real deployment, do not publicly expose Prometheus, Grafana, Alertmanager, or `/actuator/prometheus`. Use private networking, a management network, IAM, HTTPS, and secret management.
+
+---
+
+
+## Production Deployment Preparation
+
+The repository includes a production Docker Compose overlay and a Caddy reverse proxy.
+
+```text
+Internet
+→ Caddy :80 / :443
+→ Spring Boot application on the Docker network
+
+Private Docker network
+→ PostgreSQL
+→ Redis
+→ Kafka
+→ Prometheus
+→ Grafana
+→ Alertmanager
+```
+
+### Production security posture
+
+When starting with `docker-compose.yml` plus `docker-compose.prod.yml`:
+
+```text
+Caddy                 Public :80 / :443
+Spring Boot app       Internal only
+PostgreSQL            Internal only
+Redis                 Internal only
+Kafka                 Internal only
+Prometheus            Internal only
+Grafana               Internal only
+Alertmanager          Internal only
+```
+
+The production overlay removes host-port publishing for internal services. Caddy is the only public entry point.
+
+Caddy blocks public access to sensitive metric endpoints:
+
+```text
+/actuator/prometheus  → 404 from the public reverse proxy
+/actuator/metrics/**  → not intended for public exposure
+```
+
+Prometheus still scrapes the application through the private Docker network.
+
+### Environment configuration
+
+Real secrets are injected through a local `.env` file and are not tracked by Git.
+
+```text
+.env                   Ignored by Git; contains real local / deployment values
+.env.example           Tracked template with required variable names
+observability/secrets/ Ignored by Git; contains local Alertmanager webhook secret
+```
+
+Required values include:
+
+```text
+POSTGRES_PASSWORD
+DB_PASSWORD
+JWT_SECRET
+GRAFANA_ADMIN_PASSWORD
+```
+
+`JWT_SECRET` must be Base64-compatible because the application decodes it as a Base64 key.
+
+Generate a suitable value:
+
+```bash
+openssl rand -base64 64 | tr -d '\n'
+```
+
+### Start the production-style local stack
+
+```bash
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.prod.yml \
+  --env-file .env \
+  up -d --build
+```
+
+Verify the reverse proxy and health endpoint:
+
+```bash
+curl -i http://localhost/actuator/health
+```
+
+Expected indicators:
+
+```text
+HTTP/1.1 200 OK
+Via: 1.1 Caddy
+"status":"UP"
+```
+
+### Temporary public demo with Cloudflare Quick Tunnel
+
+For short-lived portfolio demonstrations, expose the locally running Caddy endpoint through Cloudflare Quick Tunnel:
+
+```bash
+cloudflared tunnel --url http://127.0.0.1:80
+```
+
+The command prints a temporary `trycloudflare.com` URL. It can demonstrate:
+
+```text
+/actuator/health
+/swagger-ui/index.html
+```
+
+Quick Tunnel is for temporary demos only:
+
+```text
+- URL changes every time the tunnel is restarted
+- Tunnel stops when cloudflared exits, the Mac sleeps, or the network disconnects
+- Do not publish a temporary URL in the README or resume
+- Do not treat it as production hosting
+```
+
+For persistent hosting, use a real domain, named Cloudflare Tunnel or cloud VM, HTTPS, private observability networking, and external secret management.
 
 ---
 
@@ -589,12 +737,19 @@ Kafka
 Prometheus
 Grafana
 Alertmanager
+Caddy reverse proxy (production overlay)
 ```
 
-Start everything:
+Start development Compose mode:
 
 ```bash
 docker compose up -d --build
+```
+
+Start production-style Compose mode:
+
+```bash
+docker compose   -f docker-compose.yml   -f docker-compose.prod.yml   --env-file .env   up -d --build
 ```
 
 Stop:
@@ -777,6 +932,13 @@ observability
 ├── grafana
 ├── alertmanager
 └── secrets                 # ignored by Git
+
+infrastructure
+└── caddy
+    └── Caddyfile
+
+.env.example                # tracked environment template
+docker-compose.prod.yml     # production Compose overlay
 ```
 
 ---
@@ -810,6 +972,7 @@ observability
 ## Future Improvements
 
 - Rate limiting and temporary account lockout for brute-force protection
+- Persistent cloud deployment with a real domain and named Cloudflare Tunnel or VM
 - Cloud deployment with private observability networking
 - CI/CD deployment pipeline
 - Load testing with k6 or Gatling and published latency metrics
