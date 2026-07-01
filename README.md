@@ -18,6 +18,7 @@ This is intentionally more than a CRUD project. It demonstrates how a backend ha
 - Kafka retry topics, dead-letter topics, and idempotent consumer processing
 - PostgreSQL `SKIP LOCKED` event claiming and processing-lease recovery
 - Prometheus, Grafana, Alertmanager, and Discord incident notifications
+- Reproducible k6 capacity tests with provisioned Grafana performance dashboards
 - Authentication audit logs and suspicious-login monitoring
 - Testcontainers integration tests for PostgreSQL, Redis, and Kafka
 - Docker Compose full-stack local runtime
@@ -471,9 +472,16 @@ outbox_events_claimed_total
 outbox_processing_recovered_total
 ```
 
-### Grafana dashboard
+### Grafana dashboards
 
-Grafana is provisioned automatically with a Reliability & Security dashboard.
+Grafana is provisioned automatically with two dashboards:
+
+```text
+observability/grafana/dashboards/outbox-dashboard.json
+observability/grafana/dashboards/performance-dashboard.json
+```
+
+**Reliability & Security**
 
 ```text
 Outbox Pending Events
@@ -487,6 +495,57 @@ Login Failures — Last 30m
 Authentication Activity Rate
 Session Security Actions — Last 30m
 ```
+
+**Performance & Capacity**
+
+```text
+Catalog Request Rate
+Catalog 5xx Error Rate
+Catalog Latency — P95 / P99
+JVM Heap Usage
+Application CPU Usage
+JVM Live Threads
+HikariCP Connections
+```
+
+### Performance and capacity validation
+
+The repository includes reproducible k6 scripts for the catalog read path:
+
+```text
+load-tests/catalog-read.js
+load-tests/catalog-stress.js
+load-tests/catalog-2_5k-soak.js
+reports/performance-baseline.md
+```
+
+#### Verified local soak test
+
+Endpoint: `GET /api/products`
+
+| Metric | Result |
+|---|---:|
+| Load profile | 2,500 req/s for 5 minutes |
+| Total requests | 750,000 |
+| Achieved throughput | 2,499.91 req/s |
+| P95 latency | 0.84 ms |
+| P99 latency | 1.11 ms |
+| Client-side request failure rate | 0.07% |
+| Dropped iterations | 0 |
+| Observed application-side 5xx | None |
+
+During the soak test, Grafana showed stable JVM heap usage, process CPU around 4–5%, no HikariCP pending connections, low active database-connection usage, and stable JVM thread counts.
+
+Run the local soak test:
+
+```bash
+docker run --rm \
+  -e BASE_URL=http://host.docker.internal:8080 \
+  -v "$PWD/load-tests:/scripts:ro" \
+  grafana/k6 run /scripts/catalog-2_5k-soak.js
+```
+
+> This benchmark was executed locally through Docker Compose on macOS. It is not a cloud benchmark, production SLA, or production-capacity guarantee.
 
 ### Alerting
 
@@ -933,6 +992,14 @@ observability
 ├── alertmanager
 └── secrets                 # ignored by Git
 
+load-tests
+├── catalog-read.js
+├── catalog-stress.js
+└── catalog-2_5k-soak.js
+
+reports
+└── performance-baseline.md
+
 infrastructure
 └── caddy
     └── Caddyfile
@@ -961,6 +1028,7 @@ docker-compose.prod.yml     # production Compose overlay
 - Lease recovery
 - At-least-once delivery and consumer idempotency
 - Micrometer custom metrics
+- k6 load testing, latency SLOs, and capacity validation
 - PromQL, Grafana provisioning, alert rules, Alertmanager routing
 - Incident lifecycle validation
 - Docker Compose infrastructure
@@ -975,7 +1043,7 @@ docker-compose.prod.yml     # production Compose overlay
 - Persistent cloud deployment with a real domain and named Cloudflare Tunnel or VM
 - Cloud deployment with private observability networking
 - CI/CD deployment pipeline
-- Load testing with k6 or Gatling and published latency metrics
+- Write-path load tests for payment idempotency, stock contention, and Outbox/Kafka recovery
 - Distributed tracing with OpenTelemetry and Tempo / Jaeger
 - Secret management, IAM, HTTPS, and production network policies
 - User-facing frontend or admin console
