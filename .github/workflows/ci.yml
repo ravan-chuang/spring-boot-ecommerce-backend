@@ -6,9 +6,13 @@ on:
       - main
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     services:
       postgres:
@@ -44,8 +48,8 @@ jobs:
       - name: Make Maven wrapper executable
         run: chmod +x ./mvnw
 
-      - name: Build and test
-        run: ./mvnw clean test
+      - name: Build, test, and generate coverage
+        run: ./mvnw --batch-mode --no-transfer-progress clean verify
         env:
           DB_URL: jdbc:postgresql://localhost:5433/spring_boot_lab
           DB_USERNAME: ravan
@@ -53,3 +57,27 @@ jobs:
           REDIS_HOST: localhost
           REDIS_PORT: 6379
           KAFKA_BOOTSTRAP_SERVERS: localhost:9092
+
+      - name: Publish test summary
+        if: always()
+        uses: test-summary/action@v2
+        with:
+          paths: target/surefire-reports/TEST-*.xml
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: target/surefire-reports/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload JaCoCo coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-report
+          path: target/site/jacoco/
+          if-no-files-found: warn
+          retention-days: 14
