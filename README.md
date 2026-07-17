@@ -1051,6 +1051,74 @@ docker-compose.prod.yml     # production Compose overlay
 
 ---
 
+
+---
+
+## Project Quality Status
+
+### Continuous Integration
+
+- GitHub Actions CI on every push and pull request
+- Maven `clean verify`
+- Testcontainers integration tests
+- JaCoCo HTML/XML reports
+- Surefire test reports uploaded as workflow artifacts
+- JaCoCo quality gate enforced during `verify`
+
+### Current Quality Baseline
+
+| Metric | Status |
+|---|---:|
+| Unit + Integration Tests | **64** |
+| Test Failures | **0** |
+| Test Errors | **0** |
+| Instruction Coverage | **73%** |
+| Branch Coverage | **56%** |
+| Coverage Gate | **Instruction ≥ 70%, Branch ≥ 50%** |
+| CI | Passing |
+
+The build fails automatically if coverage drops below the configured quality gate.
+
+---
+
+## Repository Engineering Practices
+
+- Pull-request based development
+- GitHub Actions CI
+- JaCoCo coverage reporting
+- JaCoCo coverage quality gates
+- Testcontainers integration testing
+- Docker Compose development environment
+- Production profile separation
+- Infrastructure as Code
+- Conventional Commit messages
+- MIT License
+
+---
+
+## Roadmap
+
+### Short Term
+
+- GitHub CodeQL
+- Dependabot
+- SpotBugs
+- OWASP Dependency Check
+
+### Mid Term
+
+- Cloud deployment (OCI / AWS)
+- Kubernetes deployment
+- HTTPS with a production domain
+- GitHub Actions deployment pipeline
+
+### Long Term
+
+- OpenTelemetry distributed tracing
+- Horizontal scaling
+- Chaos testing
+- Blue/Green deployment
+
 ## License
 
 MIT License.
