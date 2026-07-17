@@ -22,7 +22,7 @@ public abstract class TestcontainersIntegrationTest {
                     .withExposedPorts(6379);
 
     static final KafkaContainer kafka =
-            new KafkaContainer(DockerImageName.parse("apache/kafka-native:4.1.0"));
+            new KafkaContainer(DockerImageName.parse("apache/kafka:4.1.0"));
 
     static {
         postgres.start();
