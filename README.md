@@ -2,50 +2,77 @@
 
 [![CI](https://github.com/ravan-chuang/spring-boot-ecommerce-backend/actions/workflows/ci.yml/badge.svg)](https://github.com/ravan-chuang/spring-boot-ecommerce-backend/actions/workflows/ci.yml)
 
-A production-minded e-commerce backend built with Spring Boot, PostgreSQL, Redis, Kafka, JWT authentication, transactional outbox delivery, idempotent consumers, observability, and security-event monitoring.
+A production-minded e-commerce backend built with Spring Boot,
+PostgreSQL, Redis, Kafka, JWT authentication, transactional outbox
+delivery, idempotent consumers, observability, and security-event
+monitoring.
 
-This is intentionally more than a CRUD project. It demonstrates how a backend handles durable event delivery, duplicate processing, authorization, token lifecycle management, failure recovery, metrics, alerting, and integration testing with real infrastructure.
+This is intentionally more than a CRUD project. It demonstrates how a
+backend handles durable event delivery, duplicate processing,
+authorization, token lifecycle management, failure recovery, metrics,
+alerting, and integration testing with real infrastructure.
 
----
+------------------------------------------------------------------------
 
 ## Highlights
 
-- JWT access tokens with refresh-token rotation and revocation
-- Multi-device session management: list sessions, revoke one session, revoke all sessions
-- BCrypt passwords, USER / ADMIN authorization, and resource ownership checks
-- Payment idempotency and optimistic locking for stock consistency
-- Transactional Outbox with retry governance, FAILED state, and ADMIN replay
-- Kafka retry topics, dead-letter topics, and idempotent consumer processing
-- PostgreSQL `SKIP LOCKED` event claiming and processing-lease recovery
-- Prometheus, Grafana, Alertmanager, and Discord incident notifications
-- Reproducible k6 capacity tests with provisioned Grafana performance dashboards
-- Authentication audit logs and suspicious-login monitoring
-- Testcontainers integration tests for PostgreSQL, Redis, and Kafka
-- Docker Compose full-stack local runtime
-- Spring profiles for local, production, and test environments
-- Caddy reverse proxy with production-style private service networking
-- Temporary public demo workflow through Cloudflare Quick Tunnel
+-   JWT access tokens with refresh-token rotation and revocation
+-   Multi-device session management: list sessions, revoke one session,
+    revoke all sessions
+-   BCrypt passwords, USER / ADMIN authorization, and resource ownership
+    checks
+-   Payment idempotency and optimistic locking for stock consistency
+-   Transactional Outbox with retry governance, FAILED state, and ADMIN
+    replay
+-   Kafka retry topics, dead-letter topics, and idempotent consumer
+    processing
+-   PostgreSQL `SKIP LOCKED` event claiming and processing-lease
+    recovery
+-   Prometheus, Grafana, Alertmanager, and Discord incident
+    notifications
+-   Reproducible k6 capacity tests with provisioned Grafana performance
+    dashboards
+-   Authentication audit logs and suspicious-login monitoring
+-   Testcontainers integration tests for PostgreSQL, Redis, and Kafka
+-   Docker Compose full-stack local runtime
+-   Spring profiles for local, production, and test environments
+-   Caddy reverse proxy with production-style private service networking
+-   Temporary public demo workflow through Cloudflare Quick Tunnel
 
----
+------------------------------------------------------------------------
 
 ## Tech Stack
 
-| Area | Technologies |
-|---|---|
-| Language / Framework | Java 25, Spring Boot 4 |
-| API / Security | Spring Web, Spring Security, JWT, Swagger / OpenAPI |
-| Persistence | PostgreSQL, Spring Data JPA, Hibernate, Flyway |
-| Cache / Messaging | Redis, Apache Kafka, Spring Kafka |
-| Reliability | Transactional Outbox, retry topics, DLT, idempotent consumers |
-| Observability | Actuator, Micrometer, Prometheus, Grafana, Alertmanager |
-| Testing | JUnit, MockMvc, Testcontainers |
-| Delivery | Docker, Docker Compose, GitHub Actions, Maven |
+  -----------------------------------------------------------------------
+  Area                                Technologies
+  ----------------------------------- -----------------------------------
+  Language / Framework                Java 25, Spring Boot 4
 
----
+  API / Security                      Spring Web, Spring Security, JWT,
+                                      Swagger / OpenAPI
+
+  Persistence                         PostgreSQL, Spring Data JPA,
+                                      Hibernate, Flyway
+
+  Cache / Messaging                   Redis, Apache Kafka, Spring Kafka
+
+  Reliability                         Transactional Outbox, retry topics,
+                                      DLT, idempotent consumers
+
+  Observability                       Actuator, Micrometer, Prometheus,
+                                      Grafana, Alertmanager
+
+  Testing                             JUnit, MockMvc, Testcontainers
+
+  Delivery                            Docker, Docker Compose, GitHub
+                                      Actions, Maven
+  -----------------------------------------------------------------------
+
+------------------------------------------------------------------------
 
 ## Architecture
 
-```mermaid
+``` mermaid
 flowchart TD
     Client[Browser / Swagger / curl] --> Caddy[Caddy Reverse Proxy :80 / :443]
     Caddy --> API[Spring Boot REST API]
@@ -85,15 +112,16 @@ flowchart TD
     end
 ```
 
----
+------------------------------------------------------------------------
 
 ## Core Features
 
 ### Authentication, Refresh Tokens, and Session Management
 
-The project uses short-lived JWT access tokens and long-lived opaque refresh tokens.
+The project uses short-lived JWT access tokens and long-lived opaque
+refresh tokens.
 
-```text
+``` text
 Access token
 → JWT
 → 15-minute lifetime
@@ -109,7 +137,7 @@ Refresh token
 
 ### Authentication flow
 
-```text
+``` text
 Register / Login
 → accessToken + refreshToken
 
@@ -131,7 +159,7 @@ Logout all sessions
 
 ### Auth APIs
 
-```text
+``` text
 POST   /api/auth/register                    Public
 POST   /api/auth/login                       Public
 POST   /api/auth/refresh                     Public
@@ -146,7 +174,7 @@ POST   /api/auth/sessions/logout-all         Authenticated
 
 Each refresh-token session records:
 
-```text
+``` text
 sessionId
 deviceName
 ipAddress
@@ -155,11 +183,12 @@ lastUsedAt
 expiresAt
 ```
 
-Refresh-token rotation keeps the same `sessionId`, so token replacement still represents the same device session.
+Refresh-token rotation keeps the same `sessionId`, so token replacement
+still represents the same device session.
 
 ### Authorization rules
 
-```text
+``` text
 GET    /api/products/**                      Public
 POST   /api/products                         ADMIN only
 PUT    /api/products/**                      ADMIN only
@@ -178,13 +207,15 @@ GET    /actuator/prometheus                  Public for local Prometheus scrapin
 GET    /actuator/metrics/**                  ADMIN only
 ```
 
----
+------------------------------------------------------------------------
 
 ## Transactional Outbox and Kafka Delivery
 
-Order and payment changes must not be committed independently from their Kafka events. The project uses the Transactional Outbox pattern to reduce the dual-write consistency problem.
+Order and payment changes must not be committed independently from their
+Kafka events. The project uses the Transactional Outbox pattern to
+reduce the dual-write consistency problem.
 
-```text
+``` text
 Create Order / Pay Order
 → persist business data
 → persist PENDING outbox event in the same PostgreSQL transaction
@@ -196,14 +227,14 @@ Create Order / Pay Order
 
 ### Event topics
 
-```text
+``` text
 order-created
 payment-paid
 ```
 
 ### Outbox states
 
-```text
+``` text
 PENDING      Waiting to be published or retried
 PROCESSING   Claimed by one publisher instance
 PUBLISHED    Successfully published to Kafka
@@ -214,16 +245,18 @@ FAILED       Retry limit reached; operator action required
 
 The publisher uses PostgreSQL row locking with:
 
-```sql
+``` sql
 SELECT ...
 FOR UPDATE SKIP LOCKED
 ```
 
-This allows multiple application instances to claim different pending events without concurrently publishing the same event.
+This allows multiple application instances to claim different pending
+events without concurrently publishing the same event.
 
-A processing lease protects against an instance stopping after it has claimed an event:
+A processing lease protects against an instance stopping after it has
+claimed an event:
 
-```text
+``` text
 PROCESSING lease expires
 → recovery job returns event to PENDING
 → another instance may claim it
@@ -233,14 +266,14 @@ PROCESSING lease expires
 
 ADMIN users can inspect failed events and schedule replay:
 
-```text
+``` text
 GET  /api/admin/outbox/failed
 POST /api/admin/outbox/{eventId}/replay
 ```
 
 Replay behavior:
 
-```text
+``` text
 FAILED
 → PENDING
 → retry_count reset
@@ -248,15 +281,16 @@ FAILED
 → publisher retries Kafka delivery
 ```
 
----
+------------------------------------------------------------------------
 
 ## Kafka Retry, DLT, and Consumer Idempotency
 
 ### Consumer retry policy
 
-Malformed or temporarily unprocessable messages use non-blocking retry topics:
+Malformed or temporarily unprocessable messages use non-blocking retry
+topics:
 
-```text
+``` text
 Initial failure
 → retry after 1 second
 → retry after 2 seconds
@@ -266,24 +300,25 @@ Initial failure
 
 ### Idempotent consumers
 
-Kafka provides at-least-once delivery semantics, so duplicate delivery is possible.
+Kafka provides at-least-once delivery semantics, so duplicate delivery
+is possible.
 
 The outbox publisher attaches an event header:
 
-```text
+``` text
 outbox-event-id: <UUID>
 ```
 
 Consumers use this ID with the consumer name as a deduplication key:
 
-```text
+``` text
 processed_events
 (event_id, consumer_name)
 ```
 
 Processing flow:
 
-```text
+``` text
 Kafka event arrives
 → insert processed-event marker
 → first insert succeeds: run business side effect
@@ -292,7 +327,7 @@ Kafka event arrives
 
 The marker and business side effect run in one database transaction:
 
-```text
+``` text
 business action succeeds
 → marker commits
 
@@ -304,20 +339,20 @@ business action fails
 
 The `ORDER_CREATED` consumer writes an auditable side effect to:
 
-```text
+``` text
 order_event_audit
 ```
 
 Verified behavior:
 
-```text
+``` text
 same event delivered twice
 → processed_events contains 1 row
 → order_event_audit contains 1 row
 → duplicate side effect is prevented
 ```
 
----
+------------------------------------------------------------------------
 
 ## Payment Idempotency and Stock Consistency
 
@@ -325,30 +360,31 @@ same event delivered twice
 
 The payment endpoint requires an `Idempotency-Key`:
 
-```http
+``` http
 Idempotency-Key: pay-order-10-001
 ```
 
-When the same key is retried, the API returns the previous payment result instead of creating a duplicate charge.
+When the same key is retried, the API returns the previous payment
+result instead of creating a duplicate charge.
 
 ### Optimistic locking
 
 Product stock uses JPA optimistic locking with an entity version column.
 
-```text
+``` text
 Concurrent orders
 → version conflict detected
 → one transaction retries or fails safely
 → overselling is prevented
 ```
 
----
+------------------------------------------------------------------------
 
 ## Flyway Schema Migrations
 
 Flyway manages all PostgreSQL schema changes.
 
-```text
+``` text
 V1__init_schema.sql
 V2__create_outbox_events.sql
 V3__add_outbox_processing_lease.sql
@@ -361,7 +397,7 @@ V8__create_auth_audit_logs.sql
 
 Hibernate validates the schema instead of auto-updating it:
 
-```properties
+``` properties
 spring.jpa.hibernate.ddl-auto=validate
 spring.flyway.enabled=true
 spring.flyway.locations=classpath:db/migration
@@ -369,25 +405,25 @@ spring.flyway.locations=classpath:db/migration
 
 Check migration history:
 
-```bash
+``` bash
 docker exec -it spring_boot_lab_postgres \
   psql -U ravan -d spring_boot_lab \
   -c "SELECT installed_rank, version, description, success FROM flyway_schema_history;"
 ```
 
----
+------------------------------------------------------------------------
 
 ## Authentication Audit Logs and Security Monitoring
 
 Authentication events are stored in:
 
-```text
+``` text
 auth_audit_logs
 ```
 
 Recorded fields include:
 
-```text
+``` text
 user_id
 event_type
 outcome
@@ -399,7 +435,7 @@ created_at
 
 Audited actions include:
 
-```text
+``` text
 register
 login
 refresh
@@ -408,13 +444,14 @@ session_revoke
 sessions_revoke_all
 ```
 
-Failed auth attempts use an independent transaction, so an audit record remains persisted even when the API request returns an error.
+Failed auth attempts use an independent transaction, so an audit record
+remains persisted even when the API request returns an error.
 
 ### Authentication metrics
 
 Micrometer exports:
 
-```text
+``` text
 auth.events{action="login",outcome="success"}
 auth.events{action="login",outcome="failure"}
 auth.events{action="refresh",outcome="success"}
@@ -426,23 +463,23 @@ auth.events{action="sessions_revoke_all",outcome="success"}
 
 Prometheus exposes these as:
 
-```text
+``` text
 auth_events_total
 ```
 
 Example query:
 
-```promql
+``` promql
 increase(auth_events_total{action="login",outcome="failure"}[5m])
 ```
 
----
+------------------------------------------------------------------------
 
 ## Observability
 
 ### Actuator endpoints
 
-```text
+``` text
 /actuator/health
 /actuator/info
 /actuator/prometheus
@@ -451,7 +488,7 @@ increase(auth_events_total{action="login",outcome="failure"}[5m])
 
 ### Outbox metrics
 
-```text
+``` text
 outbox.events{status=PENDING}
 outbox.events{status=PROCESSING}
 outbox.events{status=FAILED}
@@ -464,7 +501,7 @@ outbox.processing.recovered
 
 Prometheus names:
 
-```text
+``` text
 outbox_events
 outbox_publish_success_total
 outbox_publish_failure_total
@@ -476,14 +513,14 @@ outbox_processing_recovered_total
 
 Grafana is provisioned automatically with two dashboards:
 
-```text
+``` text
 observability/grafana/dashboards/outbox-dashboard.json
 observability/grafana/dashboards/performance-dashboard.json
 ```
 
 **Reliability & Security**
 
-```text
+``` text
 Outbox Pending Events
 Outbox Processing Events
 Outbox Failed Events
@@ -498,7 +535,7 @@ Session Security Actions — Last 30m
 
 **Performance & Capacity**
 
-```text
+``` text
 Catalog Request Rate
 Catalog 5xx Error Rate
 Catalog Latency — P95 / P99
@@ -510,9 +547,10 @@ HikariCP Connections
 
 ### Performance and capacity validation
 
-The repository includes reproducible k6 scripts for the catalog read path:
+The repository includes reproducible k6 scripts for the catalog read
+path:
 
-```text
+``` text
 load-tests/catalog-read.js
 load-tests/catalog-stress.js
 load-tests/catalog-2_5k-soak.js
@@ -523,35 +561,39 @@ reports/performance-baseline.md
 
 Endpoint: `GET /api/products`
 
-| Metric | Result |
-|---|---:|
-| Load profile | 2,500 req/s for 5 minutes |
-| Total requests | 750,000 |
-| Achieved throughput | 2,499.91 req/s |
-| P95 latency | 0.84 ms |
-| P99 latency | 1.11 ms |
-| Client-side request failure rate | 0.07% |
-| Dropped iterations | 0 |
-| Observed application-side 5xx | None |
+  Metric                                                  Result
+  ---------------------------------- ---------------------------
+  Load profile                         2,500 req/s for 5 minutes
+  Total requests                                         750,000
+  Achieved throughput                             2,499.91 req/s
+  P95 latency                                            0.84 ms
+  P99 latency                                            1.11 ms
+  Client-side request failure rate                         0.07%
+  Dropped iterations                                           0
+  Observed application-side 5xx                             None
 
-During the soak test, Grafana showed stable JVM heap usage, process CPU around 4–5%, no HikariCP pending connections, low active database-connection usage, and stable JVM thread counts.
+During the soak test, Grafana showed stable JVM heap usage, process CPU
+around 4--5%, no HikariCP pending connections, low active
+database-connection usage, and stable JVM thread counts.
 
 Run the local soak test:
 
-```bash
+``` bash
 docker run --rm \
   -e BASE_URL=http://host.docker.internal:8080 \
   -v "$PWD/load-tests:/scripts:ro" \
   grafana/k6 run /scripts/catalog-2_5k-soak.js
 ```
 
-> This benchmark was executed locally through Docker Compose on macOS. It is not a cloud benchmark, production SLA, or production-capacity guarantee.
+> This benchmark was executed locally through Docker Compose on macOS.
+> It is not a cloud benchmark, production SLA, or production-capacity
+> guarantee.
 
 ### Alerting
 
 Prometheus evaluates alert rules. Alertmanager routes alerts to Discord.
 
-```text
+``` text
 OutboxFailedEvents
 OutboxPublishFailuresDetected
 OutboxPendingBacklog
@@ -559,19 +601,23 @@ SpringBootApplicationDown
 ExcessiveLoginFailures
 ```
 
-`ExcessiveLoginFailures` fires when at least five failed logins occur during a five-minute window and the condition remains true for one minute.
+`ExcessiveLoginFailures` fires when at least five failed logins occur
+during a five-minute window and the condition remains true for one
+minute.
 
-```promql
+``` promql
 increase(auth_events_total{action="login",outcome="failure"}[5m]) >= 5
 ```
 
-> `increase()` may display a non-integer value because Prometheus extrapolates counter increases across the selected time window. This is expected.
+> `increase()` may display a non-integer value because Prometheus
+> extrapolates counter increases across the selected time window. This
+> is expected.
 
 ### Verified incident workflows
 
 #### 1. Kafka outage and operational recovery
 
-```text
+``` text
 Kafka outage
 → business transaction still commits
 → outbox event remains durable in PostgreSQL
@@ -587,7 +633,7 @@ Kafka outage
 
 #### 2. Suspicious failed-login activity
 
-```text
+``` text
 Failed login × 5
 → auth_events_total increments
 → Grafana Login Failures panel increases
@@ -603,39 +649,43 @@ Failed login × 5
 
 Development Compose mode exposes the following host ports:
 
-```text
+``` text
 Swagger UI:     http://localhost:8080/swagger-ui/index.html
 Prometheus:     http://localhost:9090
 Grafana:        http://localhost:3000
 Alertmanager:   http://localhost:9093
 ```
 
-With the production Compose overlay, access the API and Swagger through Caddy instead:
+With the production Compose overlay, access the API and Swagger through
+Caddy instead:
 
-```text
+``` text
 Health:         http://localhost/actuator/health
 Swagger UI:     http://localhost/swagger-ui/index.html
 ```
 
-Prometheus, Grafana, and Alertmanager remain private in the production-style stack.
+Prometheus, Grafana, and Alertmanager remain private in the
+production-style stack.
 
 Local Grafana credentials:
 
-```text
+``` text
 username: admin
 password: admin
 ```
 
-For real deployment, do not publicly expose Prometheus, Grafana, Alertmanager, or `/actuator/prometheus`. Use private networking, a management network, IAM, HTTPS, and secret management.
+For real deployment, do not publicly expose Prometheus, Grafana,
+Alertmanager, or `/actuator/prometheus`. Use private networking, a
+management network, IAM, HTTPS, and secret management.
 
----
-
+------------------------------------------------------------------------
 
 ## Production Deployment Preparation
 
-The repository includes a production Docker Compose overlay and a Caddy reverse proxy.
+The repository includes a production Docker Compose overlay and a Caddy
+reverse proxy.
 
-```text
+``` text
 Internet
 → Caddy :80 / :443
 → Spring Boot application on the Docker network
@@ -653,7 +703,7 @@ Private Docker network
 
 When starting with `docker-compose.yml` plus `docker-compose.prod.yml`:
 
-```text
+``` text
 Caddy                 Public :80 / :443
 Spring Boot app       Internal only
 PostgreSQL            Internal only
@@ -664,22 +714,25 @@ Grafana               Internal only
 Alertmanager          Internal only
 ```
 
-The production overlay removes host-port publishing for internal services. Caddy is the only public entry point.
+The production overlay removes host-port publishing for internal
+services. Caddy is the only public entry point.
 
 Caddy blocks public access to sensitive metric endpoints:
 
-```text
+``` text
 /actuator/prometheus  → 404 from the public reverse proxy
 /actuator/metrics/**  → not intended for public exposure
 ```
 
-Prometheus still scrapes the application through the private Docker network.
+Prometheus still scrapes the application through the private Docker
+network.
 
 ### Environment configuration
 
-Real secrets are injected through a local `.env` file and are not tracked by Git.
+Real secrets are injected through a local `.env` file and are not
+tracked by Git.
 
-```text
+``` text
 .env                   Ignored by Git; contains real local / deployment values
 .env.example           Tracked template with required variable names
 observability/secrets/ Ignored by Git; contains local Alertmanager webhook secret
@@ -687,24 +740,25 @@ observability/secrets/ Ignored by Git; contains local Alertmanager webhook secre
 
 Required values include:
 
-```text
+``` text
 POSTGRES_PASSWORD
 DB_PASSWORD
 JWT_SECRET
 GRAFANA_ADMIN_PASSWORD
 ```
 
-`JWT_SECRET` must be Base64-compatible because the application decodes it as a Base64 key.
+`JWT_SECRET` must be Base64-compatible because the application decodes
+it as a Base64 key.
 
 Generate a suitable value:
 
-```bash
+``` bash
 openssl rand -base64 64 | tr -d '\n'
 ```
 
 ### Start the production-style local stack
 
-```bash
+``` bash
 docker compose \
   -f docker-compose.yml \
   -f docker-compose.prod.yml \
@@ -714,13 +768,13 @@ docker compose \
 
 Verify the reverse proxy and health endpoint:
 
-```bash
+``` bash
 curl -i http://localhost/actuator/health
 ```
 
 Expected indicators:
 
-```text
+``` text
 HTTP/1.1 200 OK
 Via: 1.1 Caddy
 "status":"UP"
@@ -728,35 +782,39 @@ Via: 1.1 Caddy
 
 ### Temporary public demo with Cloudflare Quick Tunnel
 
-For short-lived portfolio demonstrations, expose the locally running Caddy endpoint through Cloudflare Quick Tunnel:
+For short-lived portfolio demonstrations, expose the locally running
+Caddy endpoint through Cloudflare Quick Tunnel:
 
-```bash
+``` bash
 cloudflared tunnel --url http://127.0.0.1:80
 ```
 
-The command prints a temporary `trycloudflare.com` URL. It can demonstrate:
+The command prints a temporary `trycloudflare.com` URL. It can
+demonstrate:
 
-```text
+``` text
 /actuator/health
 /swagger-ui/index.html
 ```
 
 Quick Tunnel is for temporary demos only:
 
-```text
+``` text
 - URL changes every time the tunnel is restarted
 - Tunnel stops when cloudflared exits, the Mac sleeps, or the network disconnects
 - Do not publish a temporary URL in the README or resume
 - Do not treat it as production hosting
 ```
 
-For persistent hosting, use a real domain, named Cloudflare Tunnel or cloud VM, HTTPS, private observability networking, and external secret management.
+For persistent hosting, use a real domain, named Cloudflare Tunnel or
+cloud VM, HTTPS, private observability networking, and external secret
+management.
 
----
+------------------------------------------------------------------------
 
 ## Spring Profiles
 
-```text
+``` text
 application.properties
 → shared configuration
 
@@ -772,23 +830,23 @@ src/test/resources/application.properties
 
 The Docker Compose app service defaults to the local profile:
 
-```yaml
+``` yaml
 SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
 ```
 
 Start with production settings:
 
-```bash
+``` bash
 SPRING_PROFILES_ACTIVE=prod docker compose up -d --build app
 ```
 
----
+------------------------------------------------------------------------
 
 ## Docker Compose
 
 The full local stack includes:
 
-```text
+``` text
 Spring Boot application
 PostgreSQL
 Redis
@@ -801,60 +859,60 @@ Caddy reverse proxy (production overlay)
 
 Start development Compose mode:
 
-```bash
+``` bash
 docker compose up -d --build
 ```
 
 Start production-style Compose mode:
 
-```bash
+``` bash
 docker compose   -f docker-compose.yml   -f docker-compose.prod.yml   --env-file .env   up -d --build
 ```
 
 Stop:
 
-```bash
+``` bash
 docker compose down
 ```
 
 Kafka listeners:
 
-```text
+``` text
 Host machine:                localhost:9092
 Spring Boot container:       kafka:29092
 ```
 
----
+------------------------------------------------------------------------
 
 ## Local Development
 
 Start infrastructure and application:
 
-```bash
+``` bash
 docker compose up -d postgres redis kafka
 ./mvnw spring-boot:run
 ```
 
 Open Swagger:
 
-```text
+``` text
 http://localhost:8080/swagger-ui/index.html
 ```
 
 Reset local data and rerun migrations:
 
-```bash
+``` bash
 docker compose down -v
 docker compose up -d
 ```
 
----
+------------------------------------------------------------------------
 
 ## Testing
 
 The integration suite uses Testcontainers with real:
 
-```text
+``` text
 PostgreSQL
 Redis
 Kafka
@@ -862,20 +920,20 @@ Kafka
 
 Run all tests:
 
-```bash
+``` bash
 ./mvnw clean test
 ```
 
 Current expected result:
 
-```text
+``` text
 Tests run: 40, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 ```
 
 Key coverage includes:
 
-```text
+``` text
 Authentication and authorization
 Refresh-token rotation and logout revocation
 Multi-device session management
@@ -896,23 +954,23 @@ Event-retention cleanup
 
 For Docker Desktop on macOS:
 
-```bash
+``` bash
 export DOCKER_HOST=unix://$HOME/.docker/run/docker.sock
 ```
 
 The project also includes:
 
-```text
+``` text
 src/test/resources/docker-java.properties
 ```
 
 with a compatible Docker Java API version.
 
----
+------------------------------------------------------------------------
 
 ## Example API Flow
 
-```text
+``` text
 Register / Login
 → Authorize Swagger with accessToken
 → ADMIN creates product
@@ -924,7 +982,7 @@ Register / Login
 
 Example login request:
 
-```bash
+``` bash
 curl -X POST http://localhost:8080/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{
@@ -935,7 +993,7 @@ curl -X POST http://localhost:8080/api/auth/login \
 
 The response returns:
 
-```json
+``` json
 {
   "status": 200,
   "message": "Login successfully",
@@ -952,13 +1010,13 @@ The response returns:
 
 Use the access token with:
 
-```http
+``` http
 Authorization: Bearer <JWT_ACCESS_TOKEN>
 ```
 
 Refresh:
 
-```bash
+``` bash
 curl -X POST http://localhost:8080/api/auth/refresh \
   -H "Content-Type: application/json" \
   -d '{
@@ -966,11 +1024,11 @@ curl -X POST http://localhost:8080/api/auth/refresh \
   }'
 ```
 
----
+------------------------------------------------------------------------
 
 ## Project Structure
 
-```text
+``` text
 src/main/java/com/ravan/SpringBootLab
 ├── controller
 ├── service
@@ -1008,117 +1066,224 @@ infrastructure
 docker-compose.prod.yml     # production Compose overlay
 ```
 
----
+------------------------------------------------------------------------
 
 ## Engineering Concepts Practiced
 
-- REST API design and layered architecture
-- JWT authorization and ownership checks
-- Refresh-token rotation, revocation, and session management
-- Audit logging and security-event monitoring
-- BCrypt password hashing
-- PostgreSQL transactions and Flyway migrations
-- Optimistic locking
-- Payment idempotency
-- Redis caching
-- Kafka event-driven architecture
-- Retry topics and dead-letter topics
-- Transactional Outbox pattern
-- Multi-instance event processing with `SKIP LOCKED`
-- Lease recovery
-- At-least-once delivery and consumer idempotency
-- Micrometer custom metrics
-- k6 load testing, latency SLOs, and capacity validation
-- PromQL, Grafana provisioning, alert rules, Alertmanager routing
-- Incident lifecycle validation
-- Docker Compose infrastructure
-- Testcontainers integration testing
-- GitHub Actions CI
+-   REST API design and layered architecture
+-   JWT authorization and ownership checks
+-   Refresh-token rotation, revocation, and session management
+-   Audit logging and security-event monitoring
+-   BCrypt password hashing
+-   PostgreSQL transactions and Flyway migrations
+-   Optimistic locking
+-   Payment idempotency
+-   Redis caching
+-   Kafka event-driven architecture
+-   Retry topics and dead-letter topics
+-   Transactional Outbox pattern
+-   Multi-instance event processing with `SKIP LOCKED`
+-   Lease recovery
+-   At-least-once delivery and consumer idempotency
+-   Micrometer custom metrics
+-   k6 load testing, latency SLOs, and capacity validation
+-   PromQL, Grafana provisioning, alert rules, Alertmanager routing
+-   Incident lifecycle validation
+-   Docker Compose infrastructure
+-   Testcontainers integration testing
+-   GitHub Actions CI
 
----
+------------------------------------------------------------------------
 
 ## Future Improvements
 
-- Rate limiting and temporary account lockout for brute-force protection
-- Persistent cloud deployment with a real domain and named Cloudflare Tunnel or VM
-- Cloud deployment with private observability networking
-- CI/CD deployment pipeline
-- Write-path load tests for payment idempotency, stock contention, and Outbox/Kafka recovery
-- Distributed tracing with OpenTelemetry and Tempo / Jaeger
-- Secret management, IAM, HTTPS, and production network policies
-- User-facing frontend or admin console
-- Retention cleanup for auth audit logs and expired refresh tokens
+-   Rate limiting and temporary account lockout for brute-force
+    protection
+-   Persistent cloud deployment with a real domain and named Cloudflare
+    Tunnel or VM
+-   Cloud deployment with private observability networking
+-   CI/CD deployment pipeline
+-   Write-path load tests for payment idempotency, stock contention, and
+    Outbox/Kafka recovery
+-   Distributed tracing with OpenTelemetry and Tempo / Jaeger
+-   Secret management, IAM, HTTPS, and production network policies
+-   User-facing frontend or admin console
+-   Retention cleanup for auth audit logs and expired refresh tokens
 
----
+------------------------------------------------------------------------
 
-
----
+------------------------------------------------------------------------
 
 ## Project Quality Status
 
 ### Continuous Integration
 
-- GitHub Actions CI on every push and pull request
-- Maven `clean verify`
-- Testcontainers integration tests
-- JaCoCo HTML/XML reports
-- Surefire test reports uploaded as workflow artifacts
-- JaCoCo quality gate enforced during `verify`
+-   GitHub Actions CI on every push and pull request
+-   Maven `clean verify`
+-   Testcontainers integration tests
+-   JaCoCo HTML/XML reports
+-   Surefire test reports uploaded as workflow artifacts
+-   JaCoCo quality gate enforced during `verify`
 
 ### Current Quality Baseline
 
-| Metric | Status |
-|---|---:|
-| Unit + Integration Tests | **64** |
-| Test Failures | **0** |
-| Test Errors | **0** |
-| Instruction Coverage | **73%** |
-| Branch Coverage | **56%** |
-| Coverage Gate | **Instruction ≥ 70%, Branch ≥ 50%** |
-| CI | Passing |
+  Metric                                                    Status
+  -------------------------- -------------------------------------
+  Unit + Integration Tests                                  **64**
+  Test Failures                                              **0**
+  Test Errors                                                **0**
+  Instruction Coverage                                     **73%**
+  Branch Coverage                                          **56%**
+  Coverage Gate                **Instruction ≥ 70%, Branch ≥ 50%**
+  CI                                                       Passing
 
-The build fails automatically if coverage drops below the configured quality gate.
+The build fails automatically if coverage drops below the configured
+quality gate.
 
----
+------------------------------------------------------------------------
 
 ## Repository Engineering Practices
 
-- Pull-request based development
-- GitHub Actions CI
-- JaCoCo coverage reporting
-- JaCoCo coverage quality gates
-- Testcontainers integration testing
-- Docker Compose development environment
-- Production profile separation
-- Infrastructure as Code
-- Conventional Commit messages
-- MIT License
+-   Pull-request based development
+-   GitHub Actions CI
+-   JaCoCo coverage reporting
+-   JaCoCo coverage quality gates
+-   Testcontainers integration testing
+-   Docker Compose development environment
+-   Production profile separation
+-   Infrastructure as Code
+-   Conventional Commit messages
+-   MIT License
 
----
+------------------------------------------------------------------------
 
 ## Roadmap
 
 ### Short Term
 
-- GitHub CodeQL
-- Dependabot
-- SpotBugs
-- OWASP Dependency Check
+-   GitHub CodeQL
+-   Dependabot
+-   SpotBugs
+-   OWASP Dependency Check
 
 ### Mid Term
 
-- Cloud deployment (OCI / AWS)
-- Kubernetes deployment
-- HTTPS with a production domain
-- GitHub Actions deployment pipeline
+-   Cloud deployment (OCI / AWS)
+-   Kubernetes deployment
+-   HTTPS with a production domain
+-   GitHub Actions deployment pipeline
 
 ### Long Term
 
-- OpenTelemetry distributed tracing
-- Horizontal scaling
-- Chaos testing
-- Blue/Green deployment
+-   OpenTelemetry distributed tracing
+-   Horizontal scaling
+-   Chaos testing
+-   Blue/Green deployment
 
 ## License
 
 MIT License.
+
+------------------------------------------------------------------------
+
+# System Architecture, Engineering Contributions, and Production Readiness
+
+## Architecture Overview
+
+This backend follows a layered architecture:
+
+``` text
+Client
+   │
+Spring Security (JWT)
+   │
+REST Controllers
+   │
+Business Services
+   │
+Repositories (JPA)
+   │
+PostgreSQL / Redis / Kafka
+```
+
+Core reliability mechanisms include:
+
+-   Transactional Outbox
+-   Kafka Retry Topics + Dead Letter Topics
+-   Idempotent Consumers
+-   Payment Idempotency
+-   Optimistic Locking
+-   PostgreSQL `SKIP LOCKED`
+-   Processing Lease Recovery
+-   JWT + Refresh Token Rotation
+-   Multi-device Session Management
+-   Prometheus + Grafana + Alertmanager
+-   GitHub Actions + JaCoCo + Testcontainers
+
+## Engineering Contributions
+
+This project extends beyond CRUD by implementing production-oriented
+backend engineering practices.
+
+### Reliability
+
+-   Transactional Outbox for durable event publishing
+-   Kafka retry pipeline
+-   Dead-letter handling
+-   Multi-instance-safe publisher using `FOR UPDATE SKIP LOCKED`
+-   Lease recovery for interrupted workers
+
+### Security
+
+-   JWT authentication
+-   Refresh-token rotation
+-   Session revocation
+-   Authorization and ownership checks
+-   BCrypt password hashing
+-   Authentication audit logs
+
+### Data Consistency
+
+-   Payment idempotency
+-   Optimistic locking
+-   Consumer-side idempotency
+-   Transactional event publishing
+
+### Observability
+
+-   Micrometer metrics
+-   Prometheus
+-   Grafana dashboards
+-   Alertmanager
+-   Discord notifications
+-   k6 load testing
+
+### Testing & CI
+
+Current verified quality baseline:
+
+  Metric                                              Current
+  --------------------------- -------------------------------
+  Tests                                                    66
+  Failures                                                  0
+  CI                                                  Passing
+  Coverage Gate                 Instruction ≥70%, Branch ≥50%
+  Payment concurrency tests                                 ✓
+  Outbox concurrency tests                                  ✓
+
+## Practical System Contributions
+
+The repository demonstrates experience with:
+
+-   REST API design
+-   Secure authentication systems
+-   Event-driven backend architecture
+-   Distributed messaging
+-   Concurrent data consistency
+-   Integration testing against real infrastructure
+-   CI quality gates
+-   Infrastructure as Code
+-   Production-oriented deployment preparation
+
+These capabilities are representative of backend engineering work rather
+than coursework CRUD development.
