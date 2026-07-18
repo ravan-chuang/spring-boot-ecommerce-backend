@@ -11,4 +11,9 @@ public interface IdempotencyRecordRepository extends JpaRepository<IdempotencyRe
             String idempotencyKey,
             String requestPath
     );
+
+    long countByIdempotencyKeyAndRequestPath(
+            String idempotencyKey,
+            String requestPath
+    );
 }

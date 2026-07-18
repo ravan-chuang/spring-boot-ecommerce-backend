@@ -64,8 +64,19 @@ public class PaymentService {
             return toPaymentResponse(existingPayment);
         }
         
-        Order order = orderRepository.findById(orderId)
+        Order order = orderRepository.findByIdForUpdate(orderId)
         .orElseThrow(() -> new OrderNotFoundException(orderId));
+
+        existingRecord = idempotencyRecordRepository
+                .findByIdempotencyKeyAndRequestPath(idempotencyKey, requestPath)
+                .orElse(null);
+
+        if (existingRecord != null) {
+            Payment existingPayment = paymentRepository.findById(existingRecord.getPaymentId())
+                    .orElseThrow(() -> new PaymentNotFoundException(orderId));
+
+            return toPaymentResponse(existingPayment);
+        }
 
         if (order.getStatus() == OrderStatus.PAID) {
             throw new OrderAlreadyPaidException(orderId);
