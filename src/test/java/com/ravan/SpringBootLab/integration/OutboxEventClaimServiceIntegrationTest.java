@@ -14,8 +14,15 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -61,6 +68,56 @@ class OutboxEventClaimServiceIntegrationTest
 
         assertEquals(OutboxEventStatus.PROCESSING, claimedEvent.getStatus());
         assertEquals("worker-a", claimedEvent.getProcessingBy());
+    }
+
+
+    @Test
+    void shouldDistributePendingEventsAcrossConcurrentWorkersWithoutOverlap()
+            throws Exception {
+        int eventCount = 20;
+        for (int index = 0; index < eventCount; index++) {
+            createPendingEvent();
+        }
+
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+
+        try {
+            Future<List<UUID>> workerA = executor.submit(() -> {
+                ready.countDown();
+                start.await();
+                return outboxEventClaimService.claimPendingEvents(10, "worker-a");
+            });
+            Future<List<UUID>> workerB = executor.submit(() -> {
+                ready.countDown();
+                start.await();
+                return outboxEventClaimService.claimPendingEvents(10, "worker-b");
+            });
+
+            assertTrue(ready.await(5, TimeUnit.SECONDS));
+            start.countDown();
+
+            List<UUID> workerAClaims = workerA.get(10, TimeUnit.SECONDS);
+            List<UUID> workerBClaims = workerB.get(10, TimeUnit.SECONDS);
+
+            Set<UUID> overlap = new HashSet<>(workerAClaims);
+            overlap.retainAll(workerBClaims);
+
+            Set<UUID> allClaims = new HashSet<>(workerAClaims);
+            allClaims.addAll(workerBClaims);
+
+            assertEquals(10, workerAClaims.size());
+            assertEquals(10, workerBClaims.size());
+            assertTrue(overlap.isEmpty());
+            assertEquals(eventCount, allClaims.size());
+            assertEquals(
+                    eventCount,
+                    outboxEventRepository.countByStatus(OutboxEventStatus.PROCESSING)
+            );
+        } finally {
+            executor.shutdownNow();
+        }
     }
 
     @Test

@@ -11,4 +11,6 @@ public interface PaymentRepository extends JpaRepository<Payment, Integer> {
     Optional<Payment> findByOrder(Order order);
 
     boolean existsByOrder(Order order);
+
+    long countByOrder_Id(Integer orderId);
 }

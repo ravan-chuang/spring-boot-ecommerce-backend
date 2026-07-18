@@ -69,7 +69,7 @@ class PaymentServiceTest {
 
         verify(idempotencyRecordRepository, never())
                 .findByIdempotencyKeyAndRequestPath(any(), any());
-        verify(orderRepository, never()).findById(any());
+        verify(orderRepository, never()).findByIdForUpdate(any());
     }
 
     @Test
@@ -95,7 +95,7 @@ class PaymentServiceTest {
         assertThat(response.getOrderId()).isEqualTo(10);
         assertThat(response.getStatus()).isEqualTo(PaymentStatus.PAID);
 
-        verify(orderRepository, never()).findById(any());
+        verify(orderRepository, never()).findByIdForUpdate(any());
         verify(paymentRepository, never()).save(any());
         verify(outboxEventService, never()).saveEvent(
                 any(), any(), any(), any(), any()
@@ -120,7 +120,7 @@ class PaymentServiceTest {
                 () -> paymentService.payOrder(10, request, "payment-key")
         ).isInstanceOf(PaymentNotFoundException.class);
 
-        verify(orderRepository, never()).findById(any());
+        verify(orderRepository, never()).findByIdForUpdate(any());
     }
 
     @Test
@@ -129,7 +129,7 @@ class PaymentServiceTest {
                 "payment-key",
                 "/api/orders/10/payments"
         )).thenReturn(Optional.empty());
-        when(orderRepository.findById(10)).thenReturn(Optional.empty());
+        when(orderRepository.findByIdForUpdate(10)).thenReturn(Optional.empty());
 
         assertThatThrownBy(
                 () -> paymentService.payOrder(10, request, "payment-key")
@@ -224,7 +224,7 @@ class PaymentServiceTest {
 
     @Test
     void getPaymentThrowsWhenOrderDoesNotExist() {
-        when(orderRepository.findById(10)).thenReturn(Optional.empty());
+        when(orderRepository.findByIdForUpdate(10)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> paymentService.getPaymentByOrder(10))
                 .isInstanceOf(OrderNotFoundException.class);
@@ -264,7 +264,7 @@ class PaymentServiceTest {
                 "payment-key",
                 "/api/orders/10/payments"
         )).thenReturn(Optional.empty());
-        when(orderRepository.findById(10)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForUpdate(10)).thenReturn(Optional.of(order));
     }
 
     private Order pendingOrder(Integer id) {
