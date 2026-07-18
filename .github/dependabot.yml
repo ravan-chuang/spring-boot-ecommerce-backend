@@ -9,13 +9,21 @@ updates:
       time: "04:00"
       timezone: Asia/Taipei
     open-pull-requests-limit: 5
-    labels: [dependencies]
+    labels:
+      - dependencies
+
+    ignore:
+      - dependency-name: "org.testcontainers:testcontainers-bom"
+        update-types:
+          - "version-update:semver-major"
+
     groups:
       spring-and-java:
         patterns:
           - "org.springframework*"
           - "org.springframework.boot*"
           - "org.springframework.kafka*"
+
       testing:
         patterns:
           - "org.junit*"
