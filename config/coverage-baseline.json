@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "instruction_ratio": 0.761418,
-  "branch_ratio": 0.591463,
+  "instruction_ratio": 0.814756,
+  "branch_ratio": 0.682927,
   "maximum_drop": 0.005,
   "source": "Generated from target/site/jacoco/jacoco.csv"
 }
