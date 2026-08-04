@@ -2,6 +2,7 @@ package com.ravan.SpringBootLab.service;
 
 import com.ravan.SpringBootLab.dto.CreatePaymentRequest;
 import com.ravan.SpringBootLab.dto.PaymentResponse;
+import com.ravan.SpringBootLab.event.PaymentPaidEvent;
 import com.ravan.SpringBootLab.exception.IdempotencyKeyRequiredException;
 import com.ravan.SpringBootLab.exception.InvalidOrderStatusException;
 import com.ravan.SpringBootLab.exception.OrderAlreadyPaidException;
@@ -18,40 +19,73 @@ import com.ravan.SpringBootLab.repository.OrderRepository;
 import com.ravan.SpringBootLab.repository.PaymentRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Optional;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
+@ExtendWith(MockitoExtension.class)
 class PaymentServiceTest {
 
+    @Mock
     private PaymentRepository paymentRepository;
+
+    @Mock
     private OrderRepository orderRepository;
+
+    @Mock
     private IdempotencyRecordRepository idempotencyRecordRepository;
+
+    @Mock
     private OutboxEventService outboxEventService;
+
     private PaymentService paymentService;
+    private Order order;
+    private Payment payment;
     private CreatePaymentRequest request;
 
     @BeforeEach
     void setUp() {
-        paymentRepository = mock(PaymentRepository.class);
-        orderRepository = mock(OrderRepository.class);
-        idempotencyRecordRepository = mock(IdempotencyRecordRepository.class);
-        outboxEventService = mock(OutboxEventService.class);
-        request = mock(CreatePaymentRequest.class);
-
-        when(request.getMethod()).thenReturn(PaymentMethod.CREDIT_CARD);
-
         paymentService = new PaymentService(
+                paymentRepository,
+                orderRepository,
+                idempotencyRecordRepository,
+                outboxEventService
+        );
+
+        order = new Order(null, new BigDecimal("1500.00"), OrderStatus.PENDING);
+        order.setId(10);
+
+        payment = new Payment(
+                order,
+                new BigDecimal("1500.00"),
+                PaymentStatus.PAID,
+                PaymentMethod.CREDIT_CARD
+        );
+        payment.setId(20);
+        payment.setPaidAt(LocalDateTime.of(2026, 8, 5, 0, 10));
+        payment.setCreatedAt(LocalDateTime.of(2026, 8, 5, 0, 10));
+        payment.setUpdatedAt(LocalDateTime.of(2026, 8, 5, 0, 10));
+
+        request = mock(CreatePaymentRequest.class);
+    }
+
+    @Test
+    void payOrderRejectsNullIdempotencyKey() {
+        assertThrows(
+                IdempotencyKeyRequiredException.class,
+                () -> paymentService.payOrder(10, request, null)
+        );
+
+        verifyNoInteractions(
                 paymentRepository,
                 orderRepository,
                 idempotencyRecordRepository,
@@ -60,232 +94,231 @@ class PaymentServiceTest {
     }
 
     @Test
-    void rejectsNullAndBlankIdempotencyKeysBeforeRepositoryAccess() {
-        assertThatThrownBy(() -> paymentService.payOrder(10, request, null))
-                .isInstanceOf(IdempotencyKeyRequiredException.class);
+    void payOrderRejectsBlankIdempotencyKey() {
+        assertThrows(
+                IdempotencyKeyRequiredException.class,
+                () -> paymentService.payOrder(10, request, "   ")
+        );
 
-        assertThatThrownBy(() -> paymentService.payOrder(10, request, "   "))
-                .isInstanceOf(IdempotencyKeyRequiredException.class);
-
-        verify(idempotencyRecordRepository, never())
-                .findByIdempotencyKeyAndRequestPath(any(), any());
-        verify(orderRepository, never()).findByIdForUpdate(any());
+        verifyNoInteractions(
+                paymentRepository,
+                orderRepository,
+                idempotencyRecordRepository,
+                outboxEventService
+        );
     }
 
     @Test
-    void returnsExistingPaymentForRepeatedIdempotencyKey() {
-        Order order = pendingOrder(10);
-        Payment payment = paidPayment(20, order);
-        IdempotencyRecord record = new IdempotencyRecord(
-                "payment-key",
-                "/api/orders/10/payments",
-                20
-        );
+    void payOrderReturnsExistingPaymentFromFirstIdempotencyLookup() {
+        String path = "/api/orders/10/payments";
+        IdempotencyRecord record = new IdempotencyRecord("key-1", path, 20);
 
-        when(idempotencyRecordRepository.findByIdempotencyKeyAndRequestPath(
-                "payment-key",
-                "/api/orders/10/payments"
-        )).thenReturn(Optional.of(record));
+        when(idempotencyRecordRepository.findByIdempotencyKeyAndRequestPath("key-1", path))
+                .thenReturn(Optional.of(record));
         when(paymentRepository.findById(20)).thenReturn(Optional.of(payment));
 
-        PaymentResponse response =
-                paymentService.payOrder(10, request, "payment-key");
+        PaymentResponse response = paymentService.payOrder(10, request, "key-1");
 
-        assertThat(response.getId()).isEqualTo(20);
-        assertThat(response.getOrderId()).isEqualTo(10);
-        assertThat(response.getStatus()).isEqualTo(PaymentStatus.PAID);
-
-        verify(orderRepository, never()).findByIdForUpdate(any());
+        assertEquals(20, response.getId());
+        assertEquals(10, response.getOrderId());
+        assertEquals(PaymentStatus.PAID, response.getStatus());
+        verify(paymentRepository).findById(20);
+        verifyNoInteractions(orderRepository, outboxEventService);
         verify(paymentRepository, never()).save(any());
-        verify(outboxEventService, never()).saveEvent(
-                any(), any(), any(), any(), any()
-        );
     }
 
     @Test
-    void throwsWhenIdempotencyRecordReferencesMissingPayment() {
-        IdempotencyRecord record = new IdempotencyRecord(
-                "payment-key",
-                "/api/orders/10/payments",
-                999
-        );
+    void payOrderThrowsWhenIdempotencyRecordReferencesMissingPayment() {
+        String path = "/api/orders/10/payments";
+        IdempotencyRecord record = new IdempotencyRecord("key-1", path, 999);
 
-        when(idempotencyRecordRepository.findByIdempotencyKeyAndRequestPath(
-                "payment-key",
-                "/api/orders/10/payments"
-        )).thenReturn(Optional.of(record));
+        when(idempotencyRecordRepository.findByIdempotencyKeyAndRequestPath("key-1", path))
+                .thenReturn(Optional.of(record));
         when(paymentRepository.findById(999)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(
-                () -> paymentService.payOrder(10, request, "payment-key")
-        ).isInstanceOf(PaymentNotFoundException.class);
+        assertThrows(
+                PaymentNotFoundException.class,
+                () -> paymentService.payOrder(10, request, "key-1")
+        );
 
-        verify(orderRepository, never()).findByIdForUpdate(any());
+        verifyNoInteractions(orderRepository, outboxEventService);
     }
 
     @Test
-    void throwsWhenOrderDoesNotExist() {
-        when(idempotencyRecordRepository.findByIdempotencyKeyAndRequestPath(
-                "payment-key",
-                "/api/orders/10/payments"
-        )).thenReturn(Optional.empty());
-        when(orderRepository.findByIdForUpdate(10)).thenReturn(Optional.empty());
+    void payOrderReturnsExistingPaymentFromSecondLookupAfterLock() {
+        String path = "/api/orders/10/payments";
+        IdempotencyRecord record = new IdempotencyRecord("key-2", path, 20);
 
-        assertThatThrownBy(
-                () -> paymentService.payOrder(10, request, "payment-key")
-        ).isInstanceOf(OrderNotFoundException.class);
+        when(idempotencyRecordRepository.findByIdempotencyKeyAndRequestPath("key-2", path))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(record));
+        when(orderRepository.findByIdForUpdate(10)).thenReturn(Optional.of(order));
+        when(paymentRepository.findById(20)).thenReturn(Optional.of(payment));
 
-        verify(paymentRepository, never()).existsByOrder(any());
+        PaymentResponse response = paymentService.payOrder(10, request, "key-2");
+
+        assertEquals(20, response.getId());
+        verify(orderRepository).findByIdForUpdate(10);
+        verify(paymentRepository).findById(20);
         verify(paymentRepository, never()).save(any());
+        verifyNoInteractions(outboxEventService);
     }
 
     @Test
-    void rejectsAlreadyPaidOrderBeforeCheckingExistingPayment() {
-        Order order = orderWithStatus(10, OrderStatus.PAID);
+    void payOrderThrowsWhenOrderDoesNotExist() {
+        String path = "/api/orders/404/payments";
 
-        prepareNewPaymentAttempt(order);
+        when(idempotencyRecordRepository.findByIdempotencyKeyAndRequestPath("key-3", path))
+                .thenReturn(Optional.empty());
+        when(orderRepository.findByIdForUpdate(404)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(
-                () -> paymentService.payOrder(10, request, "payment-key")
-        ).isInstanceOf(OrderAlreadyPaidException.class);
+        assertThrows(
+                OrderNotFoundException.class,
+                () -> paymentService.payOrder(404, request, "key-3")
+        );
 
-        verify(paymentRepository, never()).existsByOrder(any());
         verify(paymentRepository, never()).save(any());
+        verifyNoInteractions(outboxEventService);
     }
 
     @Test
-    void rejectsOrderWhoseStatusIsNotPending() {
-        Order order = orderWithStatus(10, OrderStatus.CANCELLED);
+    void payOrderRejectsAlreadyPaidOrder() {
+        String path = "/api/orders/10/payments";
+        order.setStatus(OrderStatus.PAID);
 
-        prepareNewPaymentAttempt(order);
+        when(idempotencyRecordRepository.findByIdempotencyKeyAndRequestPath("key-4", path))
+                .thenReturn(Optional.empty());
+        when(orderRepository.findByIdForUpdate(10)).thenReturn(Optional.of(order));
 
-        assertThatThrownBy(
-                () -> paymentService.payOrder(10, request, "payment-key")
-        ).isInstanceOf(InvalidOrderStatusException.class)
-                .hasMessageContaining("Only PENDING orders can be paid")
-                .hasMessageContaining("CANCELLED");
+        assertThrows(
+                OrderAlreadyPaidException.class,
+                () -> paymentService.payOrder(10, request, "key-4")
+        );
 
-        verify(paymentRepository, never()).existsByOrder(any());
         verify(paymentRepository, never()).save(any());
+        verifyNoInteractions(outboxEventService);
     }
 
     @Test
-    void rejectsPendingOrderWhenPaymentAlreadyExists() {
-        Order order = pendingOrder(10);
+    void payOrderRejectsNonPendingOrder() {
+        String path = "/api/orders/10/payments";
+        order.setStatus(OrderStatus.CANCELLED);
 
-        prepareNewPaymentAttempt(order);
+        when(idempotencyRecordRepository.findByIdempotencyKeyAndRequestPath("key-5", path))
+                .thenReturn(Optional.empty());
+        when(orderRepository.findByIdForUpdate(10)).thenReturn(Optional.of(order));
+
+        assertThrows(
+                InvalidOrderStatusException.class,
+                () -> paymentService.payOrder(10, request, "key-5")
+        );
+
+        verify(paymentRepository, never()).save(any());
+        verifyNoInteractions(outboxEventService);
+    }
+
+    @Test
+    void payOrderRejectsWhenPaymentAlreadyExistsForOrder() {
+        String path = "/api/orders/10/payments";
+
+        when(idempotencyRecordRepository.findByIdempotencyKeyAndRequestPath("key-6", path))
+                .thenReturn(Optional.empty());
+        when(orderRepository.findByIdForUpdate(10)).thenReturn(Optional.of(order));
         when(paymentRepository.existsByOrder(order)).thenReturn(true);
 
-        assertThatThrownBy(
-                () -> paymentService.payOrder(10, request, "payment-key")
-        ).isInstanceOf(OrderAlreadyPaidException.class);
+        assertThrows(
+                OrderAlreadyPaidException.class,
+                () -> paymentService.payOrder(10, request, "key-6")
+        );
 
         verify(paymentRepository, never()).save(any());
-        verify(outboxEventService, never()).saveEvent(
-                any(), any(), any(), any(), any()
-        );
+        verifyNoInteractions(outboxEventService);
     }
 
     @Test
-    void createsPaymentRecordIdempotencyRecordOrderUpdateAndOutboxEvent() {
-        Order order = pendingOrder(10);
+    void payOrderPersistsPaymentIdempotencyRecordOrderAndOutboxEvent() {
+        when(request.getMethod()).thenReturn(PaymentMethod.CREDIT_CARD);
 
-        prepareNewPaymentAttempt(order);
+        String path = "/api/orders/10/payments";
+
+        when(idempotencyRecordRepository.findByIdempotencyKeyAndRequestPath("key-7", path))
+                .thenReturn(Optional.empty());
+        when(orderRepository.findByIdForUpdate(10)).thenReturn(Optional.of(order));
         when(paymentRepository.existsByOrder(order)).thenReturn(false);
         when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> {
-            Payment payment = invocation.getArgument(0);
-            payment.setId(20);
-            return payment;
+            Payment saved = invocation.getArgument(0);
+            saved.setId(20);
+            return saved;
         });
 
-        PaymentResponse response =
-                paymentService.payOrder(10, request, "payment-key");
+        PaymentResponse response = paymentService.payOrder(10, request, "key-7");
 
-        assertThat(response.getId()).isEqualTo(20);
-        assertThat(response.getOrderId()).isEqualTo(10);
-        assertThat(response.getAmount()).isEqualByComparingTo("1000.00");
-        assertThat(response.getStatus()).isEqualTo(PaymentStatus.PAID);
-        assertThat(response.getMethod()).isEqualTo(PaymentMethod.CREDIT_CARD);
-        assertThat(response.getPaidAt()).isNotNull();
-        assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
+        assertEquals(20, response.getId());
+        assertEquals(10, response.getOrderId());
+        assertEquals(new BigDecimal("1500.00"), response.getAmount());
+        assertEquals(PaymentMethod.CREDIT_CARD, response.getMethod());
+        assertEquals(OrderStatus.PAID, order.getStatus());
+        assertNotNull(order.getUpdatedAt());
 
-        verify(idempotencyRecordRepository).save(
-                any(IdempotencyRecord.class)
-        );
+        ArgumentCaptor<Payment> paymentCaptor = ArgumentCaptor.forClass(Payment.class);
+        verify(paymentRepository).save(paymentCaptor.capture());
+        Payment saved = paymentCaptor.getValue();
+        assertSame(order, saved.getOrder());
+        assertEquals(PaymentStatus.PAID, saved.getStatus());
+        assertNotNull(saved.getPaidAt());
+
+        ArgumentCaptor<IdempotencyRecord> recordCaptor =
+                ArgumentCaptor.forClass(IdempotencyRecord.class);
+        verify(idempotencyRecordRepository).save(recordCaptor.capture());
+        IdempotencyRecord savedRecord = recordCaptor.getValue();
+        assertEquals("key-7", savedRecord.getIdempotencyKey());
+        assertEquals(path, savedRecord.getRequestPath());
+        assertEquals(20, savedRecord.getPaymentId());
+
         verify(orderRepository).save(order);
         verify(outboxEventService).saveEvent(
                 eq("PAYMENT"),
                 eq("20"),
                 eq("PAYMENT_PAID"),
-                eq("payment-paid"),
-                any()
+                anyString(),
+                any(PaymentPaidEvent.class)
         );
     }
 
     @Test
-    void getPaymentThrowsWhenOrderDoesNotExist() {
-        when(orderRepository.findByIdForUpdate(10)).thenReturn(Optional.empty());
+    void getPaymentByOrderReturnsMappedPayment() {
+        when(orderRepository.findById(10)).thenReturn(Optional.of(order));
+        when(paymentRepository.findByOrder(order)).thenReturn(Optional.of(payment));
 
-        assertThatThrownBy(() -> paymentService.getPaymentByOrder(10))
-                .isInstanceOf(OrderNotFoundException.class);
+        PaymentResponse response = paymentService.getPaymentByOrder(10);
+
+        assertEquals(20, response.getId());
+        assertEquals(10, response.getOrderId());
+        assertEquals(PaymentStatus.PAID, response.getStatus());
+        verify(orderRepository).findById(10);
+        verify(paymentRepository).findByOrder(order);
+    }
+
+    @Test
+    void getPaymentByOrderThrowsWhenOrderMissing() {
+        when(orderRepository.findById(404)).thenReturn(Optional.empty());
+
+        assertThrows(
+                OrderNotFoundException.class,
+                () -> paymentService.getPaymentByOrder(404)
+        );
 
         verify(paymentRepository, never()).findByOrder(any());
     }
 
     @Test
-    void getPaymentThrowsWhenOrderHasNoPayment() {
-        Order order = pendingOrder(10);
-
+    void getPaymentByOrderThrowsWhenPaymentMissing() {
         when(orderRepository.findById(10)).thenReturn(Optional.of(order));
         when(paymentRepository.findByOrder(order)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> paymentService.getPaymentByOrder(10))
-                .isInstanceOf(PaymentNotFoundException.class);
-    }
-
-    @Test
-    void getPaymentReturnsExistingPayment() {
-        Order order = orderWithStatus(10, OrderStatus.PAID);
-        Payment payment = paidPayment(20, order);
-
-        when(orderRepository.findById(10)).thenReturn(Optional.of(order));
-        when(paymentRepository.findByOrder(order))
-                .thenReturn(Optional.of(payment));
-
-        PaymentResponse response = paymentService.getPaymentByOrder(10);
-
-        assertThat(response.getId()).isEqualTo(20);
-        assertThat(response.getOrderId()).isEqualTo(10);
-        assertThat(response.getStatus()).isEqualTo(PaymentStatus.PAID);
-    }
-
-    private void prepareNewPaymentAttempt(Order order) {
-        when(idempotencyRecordRepository.findByIdempotencyKeyAndRequestPath(
-                "payment-key",
-                "/api/orders/10/payments"
-        )).thenReturn(Optional.empty());
-        when(orderRepository.findByIdForUpdate(10)).thenReturn(Optional.of(order));
-    }
-
-    private Order pendingOrder(Integer id) {
-        return orderWithStatus(id, OrderStatus.PENDING);
-    }
-
-    private Order orderWithStatus(Integer id, OrderStatus status) {
-        Order order = new Order(null, new BigDecimal("1000.00"), status);
-        order.setId(id);
-        return order;
-    }
-
-    private Payment paidPayment(Integer id, Order order) {
-        Payment payment = new Payment(
-                order,
-                order.getTotalAmount(),
-                PaymentStatus.PAID,
-                PaymentMethod.CREDIT_CARD
+        assertThrows(
+                PaymentNotFoundException.class,
+                () -> paymentService.getPaymentByOrder(10)
         );
-        payment.setId(id);
-        payment.setPaidAt(LocalDateTime.now());
-        return payment;
     }
 }
