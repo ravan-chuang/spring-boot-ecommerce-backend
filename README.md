@@ -6,54 +6,61 @@
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.0-6DB33F.svg)](https://spring.io/projects/spring-boot)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-A production-oriented e-commerce backend built to demonstrate reliability, distributed-system correctness, security, observability, concurrency control, and automated quality enforcement - not only CRUD endpoints.
+A production-minded Spring Boot e-commerce backend centered on transactional correctness, recoverable failure handling, concurrency safety, and operational visibility. The project goes beyond CRUD by integrating authentication, multi-device sessions, order and payment transactions, a Transactional Outbox, Kafka at-least-once delivery, idempotent processing, monitoring, containerized delivery, and automated quality gates into one executable system.
 
-The repository combines Spring Security, JWT and refresh-token rotation, PostgreSQL, Redis, Kafka, a transactional outbox, idempotent processing, Testcontainers, Prometheus/Grafana monitoring, Docker Compose, CodeQL, Dependabot, and GitHub Actions.
+Repository: <https://github.com/ravan-chuang/spring-boot-ecommerce-backend>
 
 ## Project Positioning
 
-This is a portfolio and engineering-lab system, not a hosted commercial payment platform. Its value is the implementation and verification of backend failure-handling patterns that ordinary student CRUD projects usually omit:
+This repository is an engineering portfolio and reliability lab, not a claim that the system currently carries commercial production traffic. Its purpose is to demonstrate explicit, testable behavior under duplicate requests, duplicate messages, Kafka outages, competing publishers, stock conflicts, and credential revocation.
 
-- atomic business updates and durable event creation without a database/Kafka dual-write gap;
-- safe processing under duplicate HTTP requests and at-least-once Kafka delivery;
-- concurrency control for payments, stock, and outbox workers;
-- retry exhaustion, dead-letter handling, operator inspection, and replay;
-- revocable multi-device authentication sessions;
-- observable failure states, alerting, and reproducible load tests;
-- infrastructure-backed integration testing and mandatory CI quality gates.
+Key engineering properties:
+
+- Order or payment state and its outbound event are committed in one PostgreSQL transaction, closing the database/Kafka dual-write gap.
+- Concurrent payment attempts for one order are serialized by a PostgreSQL pessimistic lock, a one-payment-per-order database constraint, and a second idempotency lookup after the lock is acquired.
+- Multiple outbox workers cooperate through `FOR UPDATE SKIP LOCKED`, per-instance claim ownership, and an expiring processing lease.
+- Kafka retry topics, dead-letter topics, and a transactionally persisted processed-event marker support at-least-once delivery.
+- Short-lived JWT access tokens are paired with opaque refresh tokens, token hashing, rotation, and per-device session revocation.
+- Testcontainers, JaCoCo, a coverage regression baseline, GitHub Actions, CodeQL, and Dependabot provide reproducible quality evidence.
+- Actuator, Micrometer, Prometheus, Grafana, and Alertmanager turn failure states into metrics, dashboards, and alerts.
 
 ## Verified Engineering Baseline
 
-| Area | Verified baseline |
-|---|---|
-| Automated tests | 66 passing, 0 failures, 0 errors in the verified full build |
-| Build verification | Maven Wrapper executes `clean verify` |
-| Continuous integration | GitHub Actions validates pushes and pull requests |
-| Code security | CodeQL scans Java code on repository events and schedule |
-| Dependency maintenance | Dependabot manages Maven and GitHub Actions updates with a Testcontainers major-version guard |
-| Coverage enforcement | JaCoCo report, Maven coverage gate, and Coverage Baseline regression protection |
-| Integration infrastructure | PostgreSQL, Redis, and Kafka through Testcontainers |
-| Database evolution | 8 versioned Flyway migrations |
-| Delivery | Local and production-style Docker Compose configurations |
-| Performance evidence | Reproducible k6 scenarios with a documented local baseline |
-| Cloud deployment | OCI VCN, public subnet, internet gateway, NSG, public IP, and VM provisioned; application deployment remains in progress |
+The documentation baseline is the local working tree verified on 2026-08-05 at Git `HEAD ffbe94e`. Verification ran against an isolated repository snapshot and did not alter the original repository's `target/` directory or databases.
 
-## Architecture
+| Verification | Result |
+|---|---:|
+| Maven command | `./mvnw --batch-mode --no-transfer-progress clean verify` |
+| Build | **SUCCESS** |
+| Test suites | 23 |
+| Tests | 104 |
+| Passed / failed / errors / skipped | **104 / 0 / 0 / 0** |
+| Testcontainers | PostgreSQL 16 Alpine, Redis 7 Alpine, Kafka 4.1.0 |
+| JaCoCo instruction coverage | **81.48%** |
+| JaCoCo branch coverage | **68.29%** |
+| JaCoCo line coverage | **80.87%** |
+| Maven coverage gate | **Passed**: instruction >= 70%, branch >= 50% |
+| Coverage baseline check | **Passed**: maximum allowed drop 0.50 percentage points |
+| Maven time | 43.776 seconds on the local verification environment |
+
+> On JDK 25, Mockito's inline mock maker cannot self-attach in some restricted environments. This verification explicitly loaded the Byte Buddy agent. That is a test-runtime accommodation; no product code, assertions, tests, or coverage rules were changed or skipped.
+
+## System Architecture
 
 ```mermaid
 flowchart LR
-    Client[Client / Swagger / curl] --> Proxy[Caddy reverse proxy]
-    Proxy --> API[Spring Boot REST API]
+    Client[Client / Swagger / curl] --> Caddy[Caddy reverse proxy]
+    Caddy --> API[Spring Boot REST API]
     API --> Security[Spring Security + JWT]
-    Security --> Services[Business services]
+    Security --> Services[Domain services]
 
     Services --> PostgreSQL[(PostgreSQL)]
-    Services --> Redis[(Redis)]
-    Services --> Outbox[(Transactional outbox)]
+    Services --> Redis[(Redis cache)]
+    Services --> Outbox[(Transactional Outbox)]
 
-    Outbox --> Publisher[Scheduled outbox publisher]
+    Outbox --> Publisher[Scheduled publisher]
     Publisher --> Kafka[Kafka]
-    Kafka --> Consumers[Idempotent consumers]
+    Kafka --> Consumer[Idempotent consumers]
     Kafka --> Retry[Retry topics]
     Retry --> DLT[Dead-letter topics]
 
@@ -61,145 +68,262 @@ flowchart LR
     Metrics --> Prometheus[Prometheus]
     Prometheus --> Grafana[Grafana]
     Prometheus --> Alertmanager[Alertmanager]
-    Alertmanager --> Discord[Optional Discord alerts]
+    Alertmanager --> Discord[Optional Discord notification]
 
-    CI[GitHub Actions] --> Verify[Maven verify + JaCoCo]
-    CI --> CodeQL[CodeQL]
-    Dependabot[Dependabot] --> PRs[Dependency update PRs]
+    GitHub[Push / Pull Request] --> CI[GitHub Actions]
+    CI --> Verify[Maven verify + JaCoCo]
+    CI --> Baseline[Coverage baseline]
+    GitHub --> CodeQL[CodeQL]
+    Dependabot[Dependabot] --> PullRequests[Dependency PRs]
 ```
 
-The codebase separates controllers, security, business services, persistence, messaging, and operations. Business state and outbound events share one PostgreSQL transaction; Kafka publication and consumer side effects remain independently recoverable.
+The code follows controller, security, service, repository, model, DTO, event, exception, and configuration layers. PostgreSQL owns business truth, outbox state, idempotency state, and audit history. Redis currently caches individual product reads. Kafka delivers domain events. Prometheus, Grafana, and Alertmanager provide operational visibility.
 
-## Engineering Capabilities
+### Source and Operational Inventory
 
-### Security and Session Management
+| Asset | Count | Responsibility |
+|---|---:|---|
+| Main Java source files | 97 | Product code and configuration |
+| Controllers | 7 | Auth, User, Product, Cart, Order, Payment, Outbox Admin |
+| Services | 19 | Domain, auth, outbox, Kafka, audit, retention, metrics |
+| Repositories | 9 | Spring Data JPA persistence and locking |
+| Model and enum files | 13 | 9 JPA entities and 4 lifecycle enums |
+| DTO files | 24 | Request, response, validation, and pagination contracts |
+| Exception files | 12 | Domain exceptions and global mapping |
+| Flyway migrations | 8 | Schema versions V1 through V8 |
+| Test source files | 24 | 23 suites plus one shared Testcontainers base |
+| k6 scenarios | 6 | Load, stress, soak, arrival-rate, and payment idempotency |
+| Grafana dashboards | 2 | Performance and outbox operations |
 
-- Stateless Spring Security with JWT access tokens.
-- 15-minute access-token lifetime.
-- Opaque refresh tokens with a 30-day lifetime; only SHA-256 token hashes are persisted.
-- Refresh-token rotation on every refresh operation.
-- Multi-device session listing, individual revocation, logout, and logout-all.
-- BCrypt password hashing.
-- `USER` / `ADMIN` authorization and resource-ownership validation.
-- Authentication audit records and suspicious-login metrics.
+## Domain and Transaction Design
 
-### Reliability and Distributed Messaging
+### Product and Cart
 
-- Transactional Outbox for atomic business changes and event creation.
-- PostgreSQL `FOR UPDATE SKIP LOCKED` claiming for safe multi-worker publication.
-- Processing leases to recover work abandoned by interrupted publishers.
-- Bounded retries with a terminal `FAILED` state.
-- Admin inspection and replay of failed outbox events.
-- Kafka retry topics and dead-letter topics.
-- Persisted processed-event records for consumer idempotency.
-- Scheduled retention cleanup for processed-event and audit data.
+- Products support create, paginated and sorted reads, detail reads, updates, and deletion.
+- `GET /api/products/{id}` uses the Redis `products` cache; update and delete evict the product ID.
+- Product create and update DTOs validate name, description, price, and stock.
+- `Product.version` provides optimistic locking for concurrent stock mutations.
+- Cart operations add, list, update quantity, and delete. Adding the same product increments its quantity.
+- Add and update perform an early stock check, but the order transaction revalidates and deducts stock; the cart is not an inventory reservation.
+- Controller-level owner-or-admin checks are followed by service-level item ownership validation.
 
-### Data Consistency and Concurrency
+### Order Transaction
 
-- Payment idempotency through the `Idempotency-Key` request header.
-- Database-backed uniqueness and locking so concurrent requests using one key produce one logical payment.
-- Optimistic locking to detect conflicting product-stock updates.
-- Explicit transaction boundaries across order, payment, inventory, and outbox changes.
-- Integration tests covering concurrent payment requests, cooperating outbox workers, and duplicate-message handling.
+Creating an order performs the following work in one transaction:
 
-### Observability and Operations
+1. Load the user and cart.
+2. Reject a missing user or empty cart and revalidate every stock quantity.
+3. Persist a `PENDING` order and order-item name, price, and subtotal snapshots.
+4. Decrement product stock and update optimistic-lock versions.
+5. Delete the cart items.
+6. Insert a `PENDING` `ORDER_CREATED` outbox event.
 
-- Spring Boot Actuator and Micrometer instrumentation.
-- Prometheus scraping and alert rules.
-- Provisioned Grafana dashboards for application, JVM, HTTP, and outbox behavior.
-- Alertmanager routing with optional Discord notifications.
-- Operational metrics for authentication failures and outbox lifecycle states.
-- Reproducible Kafka outage/recovery and suspicious-login incident workflows.
-- k6 load, stress, soak, arrival-rate, and payment-idempotency scenarios.
+Cancellation accepts only a `PENDING` order, restores stock, and changes the order to `CANCELLED`. `/orders/slow` intentionally delays for five seconds to demonstrate an optimistic-lock race. It is a lab endpoint and should be replaced by a test harness in a production API.
 
-## Transactional Outbox Lifecycle
+### Payment and HTTP Idempotency
+
+`POST /api/orders/{orderId}/payments` requires an `Idempotency-Key` header. The service:
+
+1. Looks up an existing result by `(idempotencyKey, requestPath)`.
+2. acquires a `PESSIMISTIC_WRITE` lock on the order.
+3. Repeats the idempotency lookup after acquiring the lock to close the check-then-act race.
+4. Requires a `PENDING` order with no existing payment.
+5. Persists a `PAID` payment and the idempotency record, then changes the order to `PAID`.
+6. Inserts a `PAYMENT_PAID` outbox event in the same transaction.
+
+The primary concurrency guarantees are the order lock and `payments.order_id UNIQUE`. The current migration gives `idempotency_records` a non-unique `(key, path)` index, not a unique constraint. A generalized idempotency contract should add a unique key, request fingerprint, stored response, expiry, and cleanup.
+
+## Transactional Outbox and Kafka Reliability
 
 ```mermaid
 stateDiagram-v2
-    [*] --> PENDING: Business transaction commits
+    [*] --> PENDING: Domain transaction commits
     PENDING --> PROCESSING: Worker claims row
     PROCESSING --> PUBLISHED: Kafka publish succeeds
     PROCESSING --> PENDING: Retry remains
-    PROCESSING --> FAILED: Retry limit reached
+    PROCESSING --> FAILED: Max attempts reached
     FAILED --> PENDING: Admin replay
     PROCESSING --> PENDING: Processing lease expires
 ```
 
-```text
-business data + PENDING outbox event
-                | one PostgreSQL commit
-                v
-scheduled publisher claims event
-                |
-                +--> Kafka publish succeeds --> PUBLISHED
-                |
-                +--> retry remains ----------> PENDING
-                |
-                +--> retry exhausted --------> FAILED --> admin replay
-```
+### Producer Side
 
-Current domain topics include `order-created` and `payment-paid`.
+- `OrderService` and `PaymentService` write `outbox_events` inside their business transactions.
+- The publisher runs every second by default, claims up to 50 events, and starts after a three-second delay.
+- The native claim query orders by creation time and uses `FOR UPDATE SKIP LOCKED`.
+- A claim records `processing_at` and a random `processing_by` publisher instance ID.
+- Publish-time ownership validation prevents a stale worker from processing a claim it no longer owns.
+- The default processing lease is 60 seconds; expired `PROCESSING` events return to `PENDING`.
+- Maximum attempts are 3 in the local profile and 10 in the production profile.
+- Successful events become `PUBLISHED`; retryable failures return to `PENDING`; exhausted failures become `FAILED` with `last_error` retained.
+- Admin APIs list failed events and replay a selected event to `PENDING`.
+- Kafka records include an `outbox-event-id` header for consumer deduplication.
 
-## Technology Stack
+### Consumer Side
 
-| Area | Technologies |
-|---|---|
-| Language and framework | Java 25, Spring Boot 4.1.0, Maven Wrapper |
-| API and security | Spring Web MVC, Spring Security, JWT, Bean Validation, OpenAPI/Swagger |
-| Persistence | PostgreSQL 16, Spring Data JPA, Hibernate, Flyway |
-| Cache and messaging | Redis 7, Apache Kafka, Spring Kafka |
-| Reliability patterns | Transactional Outbox, retry topics, DLT, idempotent consumers, leases |
-| Observability | Actuator, Micrometer, Prometheus, Grafana, Alertmanager |
-| Testing | JUnit, MockMvc, Testcontainers, JaCoCo, k6 |
-| Delivery and governance | Docker, Docker Compose, Caddy, GitHub Actions, CodeQL, Dependabot |
-| Cloud work | Oracle Cloud Infrastructure networking and VM provisioning in Tokyo region |
+- Domain topics are `order-created` and `payment-paid`, currently configured with one partition and replication factor 1.
+- Each listener has four total attempts with retry-topic delays of 1, 2, and 4 seconds.
+- Exhausted records are sent to a `-dlt` topic; the current `@DltHandler` records the terminal error in logs.
+- `processed_events` uses `(event_id, consumer_name)` as its primary key.
+- The deduplication marker and business action share one transaction. A failed business action rolls back the marker and preserves safe retry behavior.
+- The `ORDER_CREATED` consumer also writes `order_event_audit`; a unique event ID prevents a duplicate audit side effect.
+- Legacy messages without `outbox-event-id` are still handled, but only a warning is logged and deduplication cannot be guaranteed.
+- Scheduled cleanup removes `processed_events` older than 30 days and `order_event_audit` rows older than 90 days.
 
-## API Overview
+## Security and Session Lifecycle
+
+- Spring Security uses stateless sessions and a custom JWT filter.
+- HMAC JWT access tokens expire after 15 minutes by default and contain the user ID and role with email as the subject.
+- Passwords are hashed with BCrypt.
+- A refresh token is a 48-byte cryptographically random opaque value. The API returns the raw secret once; the database stores only its SHA-256 hash.
+- Refresh tokens expire after 30 days by default and rotate on every refresh. A predecessor is revoked and linked to its replacement.
+- Sessions retain device, IP, creation, last-used, and expiry metadata and support listing, single-session revocation, and logout-all.
+- Authentication successes and failures are written to `auth_audit_logs`. Failure audit uses `REQUIRES_NEW`, preserving the audit row when the outer authentication transaction fails.
+- `auth.events{action,outcome}` exposes security-event counts.
+- `USER` and `ADMIN` roles protect product writes, outbox administration, and Actuator metrics. Cart, order, and payment routes also enforce owner-or-admin access.
+
+### Critical Authorization Boundary
+
+`/api/users/**` is a legacy CRUD surface currently reached by `anyRequest().permitAll()` in `SecurityConfig`. It is not production-safe account management. Before deployment, remove it or restrict it to explicit admin and self-service policies, eliminate overlap with `/api/auth/register`, and add privilege-escalation tests.
+
+Other identity boundaries include the lack of immediate access-token revocation, rate limiting, account lockout, password reset, email verification, and MFA. Swagger and OpenAPI are public at the application layer and should be disabled or restricted by environment in a production deployment.
+
+## Complete API Surface
+
+Normal successful responses use `ApiResponse<T>`. Validation failures return a field-error map. Domain failures map to HTTP 400, 404, or 409 as appropriate.
 
 ### Authentication
 
-| Method | Endpoint | Access |
+| Method | Endpoint | Access | Purpose |
+|---|---|---|---|
+| `POST` | `/api/auth/register` | Public | Register and issue an access/refresh pair |
+| `POST` | `/api/auth/login` | Public | Authenticate and create a session |
+| `POST` | `/api/auth/refresh` | Public | Rotate the refresh token and issue an access token |
+| `POST` | `/api/auth/logout` | Public | Revoke the session identified by a refresh token |
+| `GET` | `/api/auth/sessions` | Authenticated | List the current user's active sessions |
+| `DELETE` | `/api/auth/sessions/{sessionId}` | Authenticated owner | Revoke one owned session |
+| `POST` | `/api/auth/sessions/logout-all` | Authenticated | Revoke all active sessions for the current user |
+
+### User, Product, Cart, Order, and Payment
+
+| Method | Endpoint | Access | Purpose |
+|---|---|---|---|
+| `POST` | `/api/users` | **Currently public** | Legacy user creation |
+| `GET` | `/api/users` | **Currently public** | User pagination and sorting |
+| `GET` | `/api/users/{id}` | **Currently public** | User detail |
+| `PUT` | `/api/users/{id}` | **Currently public** | Legacy user update |
+| `DELETE` | `/api/users/{id}` | **Currently public** | Legacy user deletion |
+| `POST` | `/api/products` | Admin | Create a product |
+| `GET` | `/api/products` | Public | Paginated and sorted catalog |
+| `GET` | `/api/products/{id}` | Public | Redis-cached product detail |
+| `PUT` | `/api/products/{id}` | Admin | Update a product and evict cache |
+| `DELETE` | `/api/products/{id}` | Admin | Delete a product and evict cache |
+| `POST` | `/api/users/{userId}/cart/items` | Owner or admin | Add or increment a cart item |
+| `GET` | `/api/users/{userId}/cart/items` | Owner or admin | List cart items |
+| `PUT` | `/api/users/{userId}/cart/items/{cartItemId}` | Owner or admin | Update quantity |
+| `DELETE` | `/api/users/{userId}/cart/items/{cartItemId}` | Owner or admin | Remove an item |
+| `POST` | `/api/users/{userId}/orders` | Owner or admin | Create an order from the cart |
+| `GET` | `/api/users/{userId}/orders` | Owner or admin | List a user's orders |
+| `GET` | `/api/orders/{orderId}` | Order owner or admin | Read order detail |
+| `POST` | `/api/orders/{orderId}/cancel` | Order owner or admin | Cancel a pending order and restore stock |
+| `POST` | `/api/users/{userId}/orders/slow` | Owner or admin | Optimistic-lock lab endpoint |
+| `POST` | `/api/orders/{orderId}/payments` | Order owner or admin | Idempotent payment; requires `Idempotency-Key` |
+| `GET` | `/api/orders/{orderId}/payment` | Order owner or admin | Read an order's payment |
+
+### Operations
+
+| Method | Endpoint | Access | Purpose |
+|---|---|---|---|
+| `GET` | `/api/admin/outbox/failed` | Admin | List failed outbox events |
+| `POST` | `/api/admin/outbox/{eventId}/replay` | Admin | Replay a failed event |
+| `GET` | `/actuator/health` | Public | Health probe |
+| `GET` | `/actuator/info` | Public | Application metadata |
+| `GET` | `/actuator/prometheus` | Public at app layer | Prometheus scrape; blocked by production Caddy |
+| `GET` | `/actuator/metrics/**` | Admin | Metric detail; blocked by production Caddy |
+| `GET` | `/swagger-ui/index.html` | Public | API explorer |
+| `GET` | `/v3/api-docs` | Public | OpenAPI document |
+
+The 30 auth, commerce, and admin mappings exclude Actuator and documentation endpoints.
+
+## Data Model and Schema Evolution
+
+| Table | Role | Important constraint or index |
 |---|---|---|
-| `POST` | `/api/auth/register` | Public |
-| `POST` | `/api/auth/login` | Public |
-| `POST` | `/api/auth/refresh` | Public |
-| `POST` | `/api/auth/logout` | Public |
-| `GET` | `/api/auth/sessions` | Authenticated |
-| `DELETE` | `/api/auth/sessions/{sessionId}` | Authenticated |
-| `POST` | `/api/auth/sessions/logout-all` | Authenticated |
+| `users` | Identity, credential, and role | Unique email |
+| `products` | Catalog, price, and stock | Optimistic-lock `version` |
+| `cart_items` | Per-user cart | User and product indexes |
+| `orders` | Order total and state | User index |
+| `order_items` | Purchase-time product snapshots | Order and product indexes |
+| `payments` | One payment per order | `order_id UNIQUE` |
+| `idempotency_records` | HTTP idempotency result pointer | Non-unique key/path index |
+| `outbox_events` | Durable outbound events | Status, creation, and processing indexes |
+| `processed_events` | Consumer deduplication marker | `(event_id, consumer_name)` primary key |
+| `order_event_audit` | `ORDER_CREATED` audit side effect | Unique event ID |
+| `refresh_tokens` | Hashed token and session chain | Unique token hash; session and active-user indexes |
+| `auth_audit_logs` | Authentication security history | User/time and event/outcome/time indexes |
 
-### Commerce and Operations
+Flyway migrations:
 
-| Resource | Representative endpoints | Access |
-|---|---|---|
-| Products | `GET /api/products`, `GET /api/products/{id}` | Public |
-| Product administration | `POST`, `PUT`, `DELETE /api/products/**` | Admin |
-| Cart | `/api/users/{userId}/cart/**` | Owner or admin |
-| Orders | `/api/users/{userId}/orders`, `/api/orders/{orderId}` | Owner or admin |
-| Payments | `POST /api/orders/{orderId}/payments` | Owner or admin |
-| Failed outbox events | `GET /api/admin/outbox/failed` | Admin |
-| Outbox replay | `POST /api/admin/outbox/{eventId}/replay` | Admin |
+1. `V1__init_schema.sql`: core commerce schema.
+2. `V2__create_outbox_events.sql`: Transactional Outbox.
+3. `V3__add_outbox_processing_lease.sql`: claim ownership and lease.
+4. `V4__create_processed_events.sql`: consumer idempotency.
+5. `V5__create_order_event_audit.sql`: order-event audit.
+6. `V6__create_refresh_tokens.sql`: hashed refresh tokens.
+7. `V7__add_refresh_token_sessions.sql`: multi-device session metadata.
+8. `V8__create_auth_audit_logs.sql`: authentication audit trail.
 
-Payment creation expects an `Idempotency-Key` header. Protected endpoints expect `Authorization: Bearer <access-token>`.
+Hibernate uses `ddl-auto=validate` and `open-in-view=false`. Flyway exclusively owns schema changes; application startup fails when entity mappings and migrations disagree.
 
-### Operational Endpoints
+## Observability and Incident Signals
 
-| Endpoint | Intended access |
+### Metrics
+
+- Spring Boot Actuator and the Prometheus registry.
+- HTTP server request histograms with P95 and P99 percentiles.
+- `outbox.publish.success` and `outbox.publish.failure` counters.
+- `outbox.events.claimed` and `outbox.processing.recovered` counters.
+- `outbox.events{status=PENDING|PROCESSING|FAILED}` gauges.
+- `auth.events{action,outcome}` security counters.
+
+### Alerts
+
+Prometheus scrapes and evaluates every five seconds. Rules include:
+
+- A failed outbox event persisting for 30 seconds: critical.
+- Any publish failure during five minutes: warning.
+- A pending backlog persisting for five minutes: warning.
+- Application scrape target down for one minute: critical.
+- At least five login failures in five minutes, sustained for one minute: warning.
+
+Alertmanager groups by alert name, service, and severity. An optional Discord webhook is mounted from a secret file; a real webhook must never be committed.
+
+### Dashboards
+
+- `performance-dashboard.json`: application, JVM, HTTP latency, and throughput.
+- `outbox-dashboard.json`: queue state, claims, recovery, publish results, and failures.
+
+## Technology Stack
+
+| Area | Technology |
 |---|---|
-| `/actuator/health` | Public health probe |
-| `/actuator/info` | Public application information |
-| `/actuator/prometheus` | Monitoring network / local Prometheus |
-| `/actuator/metrics/**` | Admin |
-| `/swagger-ui/index.html` | Development and evaluation |
-| `/v3/api-docs` | Development and evaluation |
-
-Production deployments should restrict monitoring and documentation endpoints according to environment policy.
+| Language and runtime | Java 25 |
+| Framework | Spring Boot 4.1.0, Spring Web MVC |
+| Persistence | Spring Data JPA, Hibernate 7, PostgreSQL 16, Flyway |
+| Cache | Redis 7, Spring Cache |
+| Messaging | Apache Kafka, Spring Kafka, retry topics, DLT |
+| Security | Spring Security, JWT with JJWT 0.13.0, BCrypt |
+| API | REST, Bean Validation, springdoc OpenAPI 3.0.3 |
+| Observability | Actuator, Micrometer, Prometheus, Grafana, Alertmanager |
+| Testing | JUnit 5, Mockito, MockMvc, Testcontainers 1.21.4, JaCoCo 0.8.15, k6 |
+| Delivery | Maven Wrapper, multi-stage Docker build, Docker Compose, Caddy |
+| Governance | GitHub Actions, CodeQL security-extended, Dependabot |
 
 ## Quick Start with Docker Compose
 
 ### Prerequisites
 
-- Docker with Docker Compose v2
+- Docker Desktop or another Docker runtime with Compose v2
 - Git
 
 ```bash
@@ -208,36 +332,37 @@ cd spring-boot-ecommerce-backend
 cp .env.example .env
 ```
 
-Replace every placeholder in `.env`, especially `POSTGRES_PASSWORD`, `DB_PASSWORD`, `JWT_SECRET`, and `GRAFANA_ADMIN_PASSWORD`.
+At minimum, replace `POSTGRES_PASSWORD`, `DB_PASSWORD`, `JWT_SECRET`, and `GRAFANA_ADMIN_PASSWORD`. Generate a sufficiently long Base64 JWT secret with:
 
 ```bash
 openssl rand -base64 64
 ```
 
-Never commit `.env`, private keys, access tokens, or real credentials.
-
-Start the full local stack:
+Start the complete local stack:
 
 ```bash
 docker compose up --build -d
 docker compose ps
 ```
 
-| Service | Default local URL |
+| Service | Default local URL or port |
 |---|---|
-| Application | http://localhost:8080 |
-| Swagger UI | http://localhost:8080/swagger-ui/index.html |
-| Health | http://localhost:8080/actuator/health |
-| Prometheus | http://localhost:9090 |
-| Grafana | http://localhost:3000 |
-| Alertmanager | http://localhost:9093 |
+| Application | <http://localhost:8080> |
+| Swagger UI | <http://localhost:8080/swagger-ui/index.html> |
+| Health | <http://localhost:8080/actuator/health> |
+| PostgreSQL | `localhost:5433` |
+| Redis | `localhost:6379` |
+| Kafka | `localhost:9092` |
+| Prometheus | <http://localhost:9090> |
+| Grafana | <http://localhost:3000> |
+| Alertmanager | <http://localhost:9093> |
 
 ```bash
 docker compose logs -f app
 docker compose down
 ```
 
-Use `docker compose down -v` only when persistent local data is no longer needed.
+Use `docker compose down -v` only when persistent local data is no longer required.
 
 ## Local Application Development
 
@@ -252,155 +377,237 @@ export DB_PASSWORD=<your-postgres-password>
 export REDIS_HOST=localhost
 export REDIS_PORT=6379
 export KAFKA_BOOTSTRAP_SERVERS=localhost:9092
-export JWT_SECRET=<your-generated-secret>
+export JWT_SECRET=<your-base64-secret>
 
 ./mvnw spring-boot:run
 ```
 
-Flyway applies the schema automatically. Hibernate uses `ddl-auto=validate`, so schema drift fails fast rather than silently changing the database.
+Profiles:
 
-## Testing, CI, and Repository Governance
+- `local` is the default. It uses three outbox attempts and shorter Kafka timeouts for failure demonstrations.
+- `prod` uses ten outbox attempts, more conservative Kafka timeouts, disabled SQL logging, and protected health details.
+- `test` supplies test JWT settings, disables the scheduled publisher, and receives infrastructure endpoints from Testcontainers.
 
-Coverage quality is managed through:
-
-- JaCoCo coverage reports
-- Coverage Baseline regression tracking
-- Maven coverage gate enforcement
-- Pull-request coverage verification
-
+## Testing and Quality Gates
 
 ```bash
-./mvnw clean verify
+./mvnw --batch-mode --no-transfer-progress clean verify
+python3 scripts/coverage_baseline.py
 ```
 
-The verification lifecycle executes unit and integration tests, generates JaCoCo reports, compares coverage against the established Coverage Baseline to detect regressions, and applies the configured coverage gate. Reports are written to:
+`clean verify` compiles the project, runs unit, component, and integration tests, packages the JAR, creates the JaCoCo report, and enforces the Maven coverage gate. The coverage-baseline script is a separate regression check run immediately afterward in CI.
+
+Artifacts:
 
 - `target/surefire-reports/`
 - `target/site/jacoco/index.html`
+- `target/spring-boot-lab-0.0.1-SNAPSHOT.jar`
 
-The suite covers authentication and token rotation, authorization, order flow, payment idempotency, Kafka retry/DLT behavior, consumer idempotency, outbox claiming and recovery, retention cleanup, metrics, exception handling, and concurrency behavior.
+### Complete Verified Test Matrix
 
-Repository controls include:
+| Test suite | Tests | Type | Primary evidence |
+|---|---:|---|---|
+| `SpringBootLabApplicationTests` | 1 | Integration | Spring context, Flyway, infrastructure wiring |
+| `AuthControllerIntegrationTest` | 8 | API integration | Register, login, duplicate email, wrong password, rotation, logout, single/all sessions |
+| `OrderFlowIntegrationTest` | 2 | API integration | Order plus outbox and complete cart-to-order-to-payment flow |
+| `OutboxAdminControllerIntegrationTest` | 2 | API integration | USER denial and ADMIN replay of a failed event |
+| `OutboxMetricsAuthorizationIntegrationTest` | 2 | API integration | USER and ADMIN authorization for metrics |
+| `PaymentControllerIntegrationTest` | 4 | API integration | Payment outbox, repeat key, concurrent same key, missing key |
+| `ProductControllerIntegrationTest` | 8 | API integration | Public reads, admin writes, USER write denial |
+| `AuthAuditIntegrationTest` | 4 | DB/metrics integration | Success/failure audit, session revoke, logout-all |
+| `EventRetentionCleanupIntegrationTest` | 1 | DB integration | Deletes only rows beyond retention windows |
+| `KafkaConsumerIdempotencyIntegrationTest` | 1 | Kafka/DB integration | Duplicate delivery creates one audit row |
+| `KafkaRetryDltIntegrationTest` | 1 | Kafka integration | Empty message retries and reaches DLT |
+| `OutboxEventClaimServiceIntegrationTest` | 3 | Concurrency integration | Single claim, disjoint multi-worker distribution, lease recovery |
+| `OutboxEventPublisherIntegrationTest` | 1 | Kafka/DB integration | `PENDING` to Kafka to `PUBLISHED` |
+| `OutboxEventPublisherRetryIntegrationTest` | 2 | Failure integration | Retry to `PENDING` and exhausted `FAILED` state |
+| `ProcessedEventServiceIntegrationTest` | 2 | DB integration | First-time-only processing and business-failure rollback |
+| `ProductControllerTest` | 6 | Component | Response mapping and pagination/sort delegation |
+| `GlobalExceptionHandlerTest` | 5 | Component | Validation, 404, 400, and 409 mapping |
+| `CartServiceTest` | 13 | Unit | Create/increment/read/update/delete, ownership, stock, missing resources |
+| `OrderServiceTest` | 9 | Unit | Creation, snapshots, stock, cart clearing, cancellation, failures |
+| `OutboxEventPublisherTest` | 5 | Unit | Empty claim, stale claim, publish, retry, terminal failure |
+| `OutboxMetricsTest` | 3 | Unit | Counters, batch guards, status gauges |
+| `PaymentServiceTest` | 13 | Unit | Idempotency, locking edge cases, state validation, persistence, outbox |
+| `ProductServiceTest` | 8 | Unit | CRUD mapping, pagination, missing resources |
+| **Total** | **104** | **62 unit/component + 42 integration** | **104 passed; 0 failed, errors, or skipped** |
 
-- CI on pushes and pull requests;
-- uploaded test and coverage artifacts;
-- CodeQL Java scanning;
-- weekly Maven and GitHub Actions updates through Dependabot;
-- deliberate deferral of breaking Testcontainers major upgrades to a dedicated migration;
-- pull-request-based changes with green checks before merge.
+### Coverage Results
 
-## Performance Evidence
+| Counter | Covered | Missed | Total | Coverage |
+|---|---:|---:|---:|---:|
+| Instruction | 5,102 | 1,160 | 6,262 | **81.48%** |
+| Branch | 112 | 52 | 164 | **68.29%** |
+| Line | 1,399 | 331 | 1,730 | **80.87%** |
+| Complexity | 466 | 158 | 624 | **74.68%** |
+| Method | 426 | 116 | 542 | **78.60%** |
+| Class | 84 | 6 | 90 | **93.33%** |
 
-The `load-tests/` directory contains reproducible k6 scenarios.
+The Maven gate requires instruction >= 70% and branch >= 50%. The saved baseline is 81.4756% instruction and 68.2927% branch, with a maximum allowed drop of 0.5 percentage points. The current comparison passed.
 
-```bash
-k6 run load-tests/catalog-read.js
-```
+## Performance and Concurrency Evidence
 
-Documented local catalog-read baseline (MacBook Pro M3 Max, Docker Compose, peak 50 virtual users):
+### Catalog Read Baseline
+
+`reports/performance-baseline.md` records a local Docker Compose run on a MacBook Pro M3 Max with up to 50 VUs against `GET /api/products`:
 
 | Metric | Result |
 |---|---:|
 | Requests | 9,544 |
 | Average throughput | 79.44 req/s |
 | Average latency | 9.92 ms |
-| P95 latency | 17.93 ms |
-| P99 latency | 20.12 ms |
+| P90 / P95 / P99 | 17.07 / 17.93 / 20.12 ms |
+| Maximum latency | 47.17 ms |
 | Failed requests | 0.00% |
+| Check pass rate | 100.00% |
 
-These measurements are a reproducible local baseline, not a production-capacity claim. See [`reports/performance-baseline.md`](reports/performance-baseline.md) for the workload profile and interpretation.
+Each iteration includes 300 ms of think time, so the script intentionally limits throughput. This is a reproducible local baseline, not a production capacity claim.
 
-## Deployment Model and OCI Status
+### Payment Idempotency Verification
 
-The production Compose overlay removes direct host exposure for PostgreSQL, Redis, Kafka, the application, and monitoring services. Caddy is intended to be the only public entry point.
+Existing project documentation records the following k6/PostgreSQL operational verification. It was not rerun as part of the Maven verification above.
+
+| Metric | Result |
+|---|---:|
+| Concurrent requests | 30 |
+| Success rate / HTTP failures | 100% / 0% |
+| Average / P95 latency | 45.50 / 53.73 ms |
+| Payment rows | 1 |
+| Idempotency rows | 1 |
+| Duplicate payments | 0 |
+
+`load-tests/payment-idempotency.js` also checks HTTP 200, a payment ID, `PAID` state, P95 below one second, P99 below two seconds, and supports configurable concurrency through `VUS`.
+
+### k6 Scenarios
+
+| Script | Load model | Main thresholds |
+|---|---|---|
+| `catalog-read.js` | 10 to 30 to 50 VUs | failure < 1%, P95 < 500 ms, P99 < 1 s |
+| `catalog-stress.js` | 50 to 100 to 200 VUs | failure < 1%, P95 < 500 ms, P99 < 1 s |
+| `catalog-arrival-rate.js` | 500 to 4,000 req/s ramp | failure < 0.1%, P95 < 100 ms, P99 < 300 ms |
+| `catalog-3k.js` | 3,000 req/s for 5 min | failure < 0.1%, zero dropped, P95 < 100 ms |
+| `catalog-2_5k-soak.js` | 2,500 req/s for 5 min | failure < 0.2%, fewer than 5 dropped, P95 < 100 ms |
+| `payment-idempotency.js` | 30 simultaneous one-shot requests by default | Response correctness, latency, zero custom failures |
+
+The high arrival-rate scripts define targets and stress conditions. Apart from the catalog baseline and payment verification above, the repository does not contain saved results for them; they must not be presented as achieved capacity.
+
+## CI, Security Scanning, and Dependency Governance
+
+### Continuous Integration
+
+- Runs on pushes to `main` and every pull request.
+- Uses Temurin JDK 25 and the Maven cache.
+- Provides PostgreSQL 16 and Redis 7 service containers.
+- Runs `clean verify`, the coverage baseline comparison, and a test summary.
+- Retains test and JaCoCo artifacts for 14 days.
+- Uses a 15-minute job timeout and read-only repository permission.
+
+### CodeQL
+
+- Runs on `main` pushes, pull requests, and a Monday schedule.
+- Analyzes Java/Kotlin with build mode `none` and the `security-extended` query suite.
+
+### Dependabot
+
+- Checks Maven and GitHub Actions every Monday in `Asia/Taipei`.
+- Groups Spring/Java and testing dependencies.
+- Defers a Testcontainers major upgrade to a dedicated migration to avoid a partial BOM upgrade.
+
+## Deployment Model
+
+The `Dockerfile` uses a Java 25 JDK build stage and Java 25 JRE runtime stage. Image construction runs with `-DskipTests`; merge-time CI owns the test gate.
+
+Start the production overlay with:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
 ```
 
-Set `CADDY_SITE_ADDRESS` to `http://localhost` for local evaluation or to a real domain for Caddy-managed HTTPS.
+- PostgreSQL, Redis, Kafka, the application, Prometheus, Grafana, and Alertmanager do not publish host ports.
+- Caddy is the only public edge and listens on ports 80, 443, and HTTP/3.
+- Caddy returns 404 for `/actuator/prometheus` and `/actuator/metrics*` to prevent public proxy exposure.
+- All services use `restart: unless-stopped`.
 
-### OCI work completed
+The topology remains single-host with one Kafka broker and replication factor 1. `depends_on` is not a readiness guarantee. A production environment requires health checks, managed secrets, backups and restore drills, resource limits, and external or highly available stateful services.
 
-- Tokyo-region VCN created.
-- Regional public subnet created.
-- Internet gateway and default route configured.
-- Network security group attached to the VM.
-- Ingress rules configured for SSH, HTTP, HTTPS, and the temporary application port.
-- Public IPv4 address assigned.
-- SSH key pair generated and stored locally.
+## OCI Progress and Boundary
 
-### OCI work still in progress
+Existing engineering notes report a Tokyo-region VCN, public subnet, Internet Gateway, route, NSG, public IPv4 address, VM, and SSH key. Application deployment has not been verified. The recorded Oracle Linux 9 `VM.Standard.E2.1.Micro` instance has one GB of RAM, times out before the SSH banner exchange, and is too small for the complete Spring Boot, PostgreSQL, Redis, Kafka, Prometheus, and Grafana stack.
 
-The current cloud VM is an Oracle Linux 9 `VM.Standard.E2.1.Micro` instance with 1 GB RAM, not the originally intended Ubuntu/Ampere configuration. The network path to TCP port 22 is reachable, but SSH currently times out during banner exchange before authentication. Therefore:
+This is an external infrastructure progress note. The repository contains no Terraform or Pulumi definition that can independently recreate or verify the OCI state. The next evidence-producing step is to repair or replace the VM, verify SSH, reduce or externalize stateful services, deploy behind domain TLS, and retain an external health-check result.
 
-- the application has **not** yet been deployed to OCI;
-- the public IP is **not** a live product endpoint;
-- the current 1 GB VM is insufficient for the complete application, database, Kafka, and observability stack;
-- the next cloud milestone is to repair or replace the VM, verify SSH access, then deploy a resource-budgeted stack.
+## Known Limitations and Engineering Risks
 
-Do not describe the repository as cloud-hosted until an external health check and deployment evidence are committed.
+| Priority | Current state | Impact | Recommended action |
+|---|---|---|---|
+| P0 | Legacy `/api/users/**` CRUD is public | Unauthorized users can read, modify, or delete user rows | Remove it or enforce explicit admin/self-service policy and tests |
+| P0 | JWT, database, and Grafana secrets depend on environment files | Secret exposure breaks the security boundary | Use a managed secret store, rotation, and secret scanning |
+| P1 | Idempotency table lacks a unique key and request fingerprint | Generalized idempotency remains ambiguous | Add a unique key, request hash, stored response, expiry, and cleanup |
+| P1 | Single Kafka broker and RF=1 | No broker-level availability | Use managed or clustered Kafka with replication |
+| P1 | DLT handling is log-only | Terminal records lack an operator workflow | Add DLT inspection/replay, quarantine, and operator audit |
+| P1 | Payment is simulated | The project does not prove a real payment integration | Add a sandbox adapter, provider idempotency, and signed webhooks |
+| P1 | Access JWTs have no immediate denylist | Refresh revocation does not invalidate an issued access token immediately | Keep a short TTL; add token versioning or a denylist if required |
+| P2 | Compose lacks complete health checks and resource limits | Startup races and noisy-neighbor risk | Add readiness, limits, startup ordering, and shutdown tests |
+| P2 | No distributed tracing or correlation ID | HTTP-to-outbox-to-Kafka diagnosis is expensive | Add OpenTelemetry and trace propagation |
+| P2 | No rate limiting or abuse controls | Login and public endpoints can be abused | Add gateway/application limits, lockout policy, and a WAF |
+| P2 | Retention policy is incomplete for user and audit data | Privacy and capacity governance remain incomplete | Define classification, retention, erasure, and backup policies |
 
-## Project Structure
+## Prioritized Roadmap
+
+1. Close the `/api/users` authorization boundary and add self/admin privilege tests.
+2. Add a unique idempotency key, request fingerprint, stored response, expiry, and cleanup.
+3. Establish a stable cloud host, infrastructure as code, domain TLS, protected CI/CD, and rollback evidence.
+4. Move PostgreSQL, Redis, Kafka, and observability state to backed-up, highly available services.
+5. Add OpenTelemetry, correlation IDs, and trace-aware logging.
+6. Add a DLT operator workflow, backup/restore drills, and an incident runbook.
+7. Add API contract tests, a full end-to-end test, image scanning, and an SBOM.
+8. Integrate a payment-provider sandbox through an adapter and verify signed webhooks.
+
+## Repository Structure
 
 ```text
 .
 ├── .github/
-│   ├── dependabot.yml
-│   └── workflows/
-│       ├── ci.yml
-│       └── codeql.yml
+│   ├── workflows/              # CI and CodeQL
+│   └── dependabot.yml
+├── config/
+│   └── coverage-baseline.json
 ├── infrastructure/caddy/
-├── load-tests/
+├── load-tests/                 # Six k6 scenarios
 ├── observability/
 │   ├── alertmanager/
 │   ├── grafana/
 │   └── prometheus/
 ├── reports/
-├── src/main/java/
-├── src/main/resources/db/migration/
-├── src/test/
+│   └── performance-baseline.md
+├── scripts/
+│   └── coverage_baseline.py
+├── src/main/java/com/ravan/SpringBootLab/
+│   ├── config/
+│   ├── controller/
+│   ├── dto/
+│   ├── event/
+│   ├── exception/
+│   ├── model/
+│   ├── repository/
+│   ├── security/
+│   └── service/
+├── src/main/resources/
+│   ├── db/migration/
+│   └── application*.properties
+├── src/test/                   # Unit, component, integration, Testcontainers
+├── Dockerfile
 ├── docker-compose.yml
 ├── docker-compose.prod.yml
-├── Dockerfile
 └── pom.xml
 ```
 
-## Failure Scenarios Demonstrated
+## Professional Assessment
 
-1. **Kafka unavailable:** committed outbox events remain durable and are retried.
-2. **Retry exhaustion:** the event becomes `FAILED`, is inspectable, and can be replayed.
-3. **Publisher interruption:** an expired lease returns the event to recoverable work.
-4. **Duplicate Kafka delivery:** a persisted processed-event key prevents duplicate side effects.
-5. **Repeated or concurrent payment request:** one idempotency key produces one logical payment.
-6. **Concurrent stock updates:** optimistic locking exposes conflicting writes.
-7. **Suspicious login failures:** authentication metrics can trigger Prometheus alerts.
-8. **Dependency-breaking update:** CI catches incompatible dependency changes before merge.
+This project demonstrates a level of engineering completeness that is unusual for a junior backend or internship portfolio. It connects transaction boundaries, pessimistic and optimistic locking, at-least-once delivery, idempotency, explicit failure lifecycles, operational metrics, and CI quality gates into one coherent design, then supports those claims with executable tests.
 
-## Scope and Limitations
-
-Current boundaries include:
-
-- no real payment-provider integration;
-- single-node local Kafka and database defaults;
-- no verified multi-instance or multi-region deployment;
-- no managed secret store;
-- no automated backup/restore drill;
-- load-test evidence is machine- and workload-specific;
-- OCI infrastructure exists, but application deployment is not yet verified.
-
-## Roadmap
-
-1. Replace or repair the OCI VM and establish stable SSH access.
-2. Deploy a resource-budgeted production Compose stack and publish an external health check.
-3. Add a domain, HTTPS, and restricted ingress rules; remove direct public exposure of port `8080`.
-4. Add GitHub Actions deployment with environment protection and rollback.
-5. Add OpenTelemetry tracing and correlation IDs.
-6. Add backup/restore drills and recovery documentation.
-7. Add contract and end-to-end API tests.
-8. Validate multi-instance behavior with longer soak and failure-injection tests.
-9. Add a payment-provider sandbox behind an adapter interface.
+The accurate positioning is: **a backend engineering portfolio with production thinking, established reliability patterns, and comprehensive automated evidence**. It is not yet a commercial production service, and its security gap, single-host topology, simulated payment integration, and unverified cloud deployment should remain transparent.
 
 ## License
 
-Distributed under the [MIT License](LICENSE).
+MIT License. See [`LICENSE`](LICENSE).
