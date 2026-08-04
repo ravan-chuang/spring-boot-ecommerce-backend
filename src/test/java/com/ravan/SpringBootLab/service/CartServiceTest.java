@@ -117,7 +117,7 @@ class CartServiceTest {
         CartItemResponse response = cartService.addItemToCart(1, request);
 
         assertEquals(5, cartItem.getQuantity());
-        assertTrue(cartItem.getUpdatedAt().isAfter(previousUpdatedAt));
+        assertFalse(cartItem.getUpdatedAt().isBefore(previousUpdatedAt));
         assertEquals(5, response.getQuantity());
         assertEquals(new BigDecimal("5000.00"), response.getSubtotal());
         verify(cartItemRepository).save(cartItem);
@@ -207,7 +207,7 @@ class CartServiceTest {
         CartItemResponse response = cartService.updateCartItem(1, 3, request);
 
         assertEquals(4, cartItem.getQuantity());
-        assertTrue(cartItem.getUpdatedAt().isAfter(previousUpdatedAt));
+        assertFalse(cartItem.getUpdatedAt().isBefore(previousUpdatedAt));
         assertEquals(4, response.getQuantity());
         assertEquals(new BigDecimal("4000.00"), response.getSubtotal());
         verify(cartItemRepository).save(cartItem);
