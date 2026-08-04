@@ -31,7 +31,7 @@ This is a portfolio and engineering-lab system, not a hosted commercial payment 
 | Continuous integration | GitHub Actions validates pushes and pull requests |
 | Code security | CodeQL scans Java code on repository events and schedule |
 | Dependency maintenance | Dependabot manages Maven and GitHub Actions updates with a Testcontainers major-version guard |
-| Coverage enforcement | JaCoCo report and Maven coverage gate |
+| Coverage enforcement | JaCoCo report, Maven coverage gate, and Coverage Baseline regression protection |
 | Integration infrastructure | PostgreSQL, Redis, and Kafka through Testcontainers |
 | Database evolution | 8 versioned Flyway migrations |
 | Delivery | Local and production-style Docker Compose configurations |
@@ -261,11 +261,19 @@ Flyway applies the schema automatically. Hibernate uses `ddl-auto=validate`, so 
 
 ## Testing, CI, and Repository Governance
 
+Coverage quality is managed through:
+
+- JaCoCo coverage reports
+- Coverage Baseline regression tracking
+- Maven coverage gate enforcement
+- Pull-request coverage verification
+
+
 ```bash
 ./mvnw clean verify
 ```
 
-The verification lifecycle executes unit and integration tests, generates JaCoCo reports, and applies the configured coverage gate. Reports are written to:
+The verification lifecycle executes unit and integration tests, generates JaCoCo reports, compares coverage against the established Coverage Baseline to detect regressions, and applies the configured coverage gate. Reports are written to:
 
 - `target/surefire-reports/`
 - `target/site/jacoco/index.html`

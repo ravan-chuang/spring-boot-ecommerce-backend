@@ -96,7 +96,7 @@ These are executable tests, not only design claims.
 
 - Maven Wrapper for reproducible builds.
 - GitHub Actions CI on pushes and pull requests.
-- JaCoCo coverage reporting and gate enforcement.
+- JaCoCo coverage reporting, Coverage Baseline regression tracking, and gate enforcement.
 - CodeQL Java scanning.
 - Dependabot for Maven and GitHub Actions dependencies.
 - A policy that defers breaking Testcontainers major upgrades to a dedicated migration.
