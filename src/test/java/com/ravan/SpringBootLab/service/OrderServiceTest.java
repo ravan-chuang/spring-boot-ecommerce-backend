@@ -237,7 +237,7 @@ class OrderServiceTest {
 
     @Test
     void cancelOrderRestoresStockAndMarksOrderCancelled() {
-        when(orderRepository.findById(4)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForUpdate(4)).thenReturn(Optional.of(order));
         when(orderItemRepository.findByOrder(order)).thenReturn(List.of(orderItem));
         when(orderRepository.save(order)).thenReturn(order);
 
@@ -255,7 +255,7 @@ class OrderServiceTest {
     @Test
     void cancelOrderRejectsNonPendingOrder() {
         order.setStatus(OrderStatus.PAID);
-        when(orderRepository.findById(4)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForUpdate(4)).thenReturn(Optional.of(order));
 
         assertThrows(
                 InvalidOrderStatusException.class,

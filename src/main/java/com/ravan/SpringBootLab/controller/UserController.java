@@ -5,6 +5,7 @@ import com.ravan.SpringBootLab.dto.CreateUserRequest;
 import com.ravan.SpringBootLab.dto.CreateUserResponse;
 import com.ravan.SpringBootLab.dto.UpdateUserRequest;
 import com.ravan.SpringBootLab.dto.UserResponse;
+import com.ravan.SpringBootLab.security.CurrentUserService;
 import com.ravan.SpringBootLab.service.UserService;
 import com.ravan.SpringBootLab.dto.PageResponse;
 import org.springframework.data.domain.PageRequest;
@@ -30,9 +31,14 @@ import java.util.List;
 public class UserController {
 
     private final UserService userService;
+    private final CurrentUserService currentUserService;
 
-    public UserController(UserService userService) {
+    public UserController(
+            UserService userService,
+            CurrentUserService currentUserService
+    ) {
         this.userService = userService;
+        this.currentUserService = currentUserService;
     }
 
     @Operation(summary = "Create user", description = "Create a new user")
@@ -79,6 +85,8 @@ public class UserController {
     @Operation(summary = "Get user by id", description = "Get a single user by id")
     @GetMapping("/api/users/{id}")
     public ResponseEntity<ApiResponse<UserResponse>> getUser(@PathVariable int id) {
+        currentUserService.requireUserIdOrAdmin(id);
+
         UserResponse user = userService.getUserById(id);
 
         return ResponseEntity.ok(
@@ -96,6 +104,8 @@ public class UserController {
             @PathVariable int id,
             @Valid @RequestBody UpdateUserRequest request
     ) {
+        currentUserService.requireUserIdOrAdmin(id);
+
         UserResponse updatedUser = userService.updateUserById(id, request);
 
         return ResponseEntity.ok(
@@ -110,6 +120,8 @@ public class UserController {
     @Operation(summary = "Delete user", description = "Delete user by id")
     @DeleteMapping("/api/users/{id}")
     public ResponseEntity<ApiResponse<Void>> deleteUser(@PathVariable int id) {
+        currentUserService.requireUserIdOrAdmin(id);
+
         userService.deleteUserById(id);
 
         return ResponseEntity.ok(

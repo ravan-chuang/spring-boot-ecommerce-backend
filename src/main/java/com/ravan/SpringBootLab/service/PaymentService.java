@@ -4,6 +4,8 @@ import com.ravan.SpringBootLab.config.KafkaTopicConfig;
 import com.ravan.SpringBootLab.event.PaymentPaidEvent;
 import com.ravan.SpringBootLab.dto.CreatePaymentRequest;
 import com.ravan.SpringBootLab.dto.PaymentResponse;
+import com.ravan.SpringBootLab.exception.IdempotencyConflictException;
+import com.ravan.SpringBootLab.exception.InvalidIdempotencyKeyException;
 import com.ravan.SpringBootLab.exception.IdempotencyKeyRequiredException;
 import com.ravan.SpringBootLab.exception.InvalidOrderStatusException;
 import com.ravan.SpringBootLab.exception.OrderAlreadyPaidException;
@@ -17,9 +19,15 @@ import com.ravan.SpringBootLab.model.PaymentStatus;
 import com.ravan.SpringBootLab.repository.IdempotencyRecordRepository;
 import com.ravan.SpringBootLab.repository.OrderRepository;
 import com.ravan.SpringBootLab.repository.PaymentRepository;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
+import java.util.HexFormat;
 
 @Service
 public class PaymentService {
@@ -28,17 +36,20 @@ public class PaymentService {
     private final OrderRepository orderRepository;
     private final IdempotencyRecordRepository idempotencyRecordRepository;
     private final OutboxEventService outboxEventService;
+    private final long idempotencyRetentionHours;
 
     public PaymentService(
             PaymentRepository paymentRepository,
             OrderRepository orderRepository,
             IdempotencyRecordRepository idempotencyRecordRepository,
-            OutboxEventService outboxEventService
+            OutboxEventService outboxEventService,
+            @Value("${payment.idempotency.retention-hours:24}") long idempotencyRetentionHours
     ) {
         this.paymentRepository = paymentRepository;
         this.orderRepository = orderRepository;
         this.idempotencyRecordRepository = idempotencyRecordRepository;
         this.outboxEventService = outboxEventService;
+        this.idempotencyRetentionHours = Math.max(1, idempotencyRetentionHours);
     }
 
     @Transactional
@@ -50,32 +61,34 @@ public class PaymentService {
         if (idempotencyKey == null || idempotencyKey.isBlank()) {
             throw new IdempotencyKeyRequiredException();
         }
-        
-        String requestPath = "/api/orders/" + orderId + "/payments";
-        
-        IdempotencyRecord existingRecord = idempotencyRecordRepository
-        .findByIdempotencyKeyAndRequestPath(idempotencyKey, requestPath)
-        .orElse(null);
-        
-        if (existingRecord != null) {
-            Payment existingPayment = paymentRepository.findById(existingRecord.getPaymentId())
-            .orElseThrow(() -> new PaymentNotFoundException(orderId));
-            
-            return toPaymentResponse(existingPayment);
-        }
-        
-        Order order = orderRepository.findByIdForUpdate(orderId)
-        .orElseThrow(() -> new OrderNotFoundException(orderId));
 
-        existingRecord = idempotencyRecordRepository
-                .findByIdempotencyKeyAndRequestPath(idempotencyKey, requestPath)
+        String normalizedIdempotencyKey = idempotencyKey.trim();
+        if (normalizedIdempotencyKey.length() > 255) {
+            throw new InvalidIdempotencyKeyException(
+                    "Idempotency-Key cannot exceed 255 characters"
+            );
+        }
+
+        String requestPath = "/api/orders/" + orderId + "/payments";
+        String requestFingerprint = fingerprint(request);
+
+        IdempotencyRecord existingRecord = idempotencyRecordRepository
+                .findByIdempotencyKeyAndRequestPath(normalizedIdempotencyKey, requestPath)
                 .orElse(null);
 
         if (existingRecord != null) {
-            Payment existingPayment = paymentRepository.findById(existingRecord.getPaymentId())
-                    .orElseThrow(() -> new PaymentNotFoundException(orderId));
+            return replayExistingPayment(existingRecord, requestFingerprint, orderId);
+        }
+        
+        Order order = orderRepository.findByIdForUpdate(orderId)
+                .orElseThrow(() -> new OrderNotFoundException(orderId));
 
-            return toPaymentResponse(existingPayment);
+        existingRecord = idempotencyRecordRepository
+                .findByIdempotencyKeyAndRequestPath(normalizedIdempotencyKey, requestPath)
+                .orElse(null);
+
+        if (existingRecord != null) {
+            return replayExistingPayment(existingRecord, requestFingerprint, orderId);
         }
 
         if (order.getStatus() == OrderStatus.PAID) {
@@ -104,9 +117,12 @@ public class PaymentService {
         Payment savedPayment = paymentRepository.save(payment);
 
         IdempotencyRecord record = new IdempotencyRecord(
-            idempotencyKey,
-            requestPath,
-            savedPayment.getId()
+                normalizedIdempotencyKey,
+                requestPath,
+                requestFingerprint,
+                savedPayment.getId(),
+                200,
+                LocalDateTime.now().plusHours(idempotencyRetentionHours)
         );
         
         idempotencyRecordRepository.save(record);
@@ -140,6 +156,34 @@ public class PaymentService {
                 .orElseThrow(() -> new PaymentNotFoundException(orderId));
 
         return toPaymentResponse(payment);
+    }
+
+    private PaymentResponse replayExistingPayment(
+            IdempotencyRecord record,
+            String requestFingerprint,
+            Integer orderId
+    ) {
+        if (!requestFingerprint.equals(record.getRequestFingerprint())) {
+            throw new IdempotencyConflictException();
+        }
+
+        Payment existingPayment = paymentRepository.findById(record.getPaymentId())
+                .orElseThrow(() -> new PaymentNotFoundException(orderId));
+
+        return toPaymentResponse(existingPayment);
+    }
+
+    private String fingerprint(CreatePaymentRequest request) {
+        String canonicalRequest = "method=" + request.getMethod().name();
+
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(
+                    digest.digest(canonicalRequest.getBytes(StandardCharsets.UTF_8))
+            );
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is unavailable", exception);
+        }
     }
 
     private PaymentResponse toPaymentResponse(Payment payment) {

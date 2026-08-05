@@ -119,6 +119,12 @@ class GlobalExceptionHandlerTest {
                 handler::handleIdempotencyKeyRequiredException,
                 HttpStatus.BAD_REQUEST
         );
+        assertExceptionResponse(
+                InvalidIdempotencyKeyException.class,
+                "Idempotency-Key cannot exceed 255 characters",
+                handler::handleInvalidIdempotencyKeyException,
+                HttpStatus.BAD_REQUEST
+        );
     }
 
     @Test
@@ -127,6 +133,12 @@ class GlobalExceptionHandlerTest {
                 ConcurrencyConflictException.class,
                 "Concurrent update conflict",
                 handler::handleConcurrencyConflictException,
+                HttpStatus.CONFLICT
+        );
+        assertExceptionResponse(
+                IdempotencyConflictException.class,
+                "Idempotency-Key was already used with a different request payload",
+                handler::handleIdempotencyConflictException,
                 HttpStatus.CONFLICT
         );
     }

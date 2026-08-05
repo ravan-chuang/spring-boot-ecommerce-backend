@@ -3,7 +3,9 @@ package com.ravan.SpringBootLab.service;
 import com.ravan.SpringBootLab.dto.CreatePaymentRequest;
 import com.ravan.SpringBootLab.dto.PaymentResponse;
 import com.ravan.SpringBootLab.event.PaymentPaidEvent;
+import com.ravan.SpringBootLab.exception.IdempotencyConflictException;
 import com.ravan.SpringBootLab.exception.IdempotencyKeyRequiredException;
+import com.ravan.SpringBootLab.exception.InvalidIdempotencyKeyException;
 import com.ravan.SpringBootLab.exception.InvalidOrderStatusException;
 import com.ravan.SpringBootLab.exception.OrderAlreadyPaidException;
 import com.ravan.SpringBootLab.exception.OrderNotFoundException;
@@ -35,6 +37,9 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class PaymentServiceTest {
 
+    private static final String CREDIT_CARD_FINGERPRINT =
+            "b41381f93987bd40ee50d3325112ba45be62e4cd0999e1bf0c866881f4e2c0a4";
+
     @Mock
     private PaymentRepository paymentRepository;
 
@@ -58,7 +63,8 @@ class PaymentServiceTest {
                 paymentRepository,
                 orderRepository,
                 idempotencyRecordRepository,
-                outboxEventService
+                outboxEventService,
+                24
         );
 
         order = new Order(null, new BigDecimal("1500.00"), OrderStatus.PENDING);
@@ -76,6 +82,7 @@ class PaymentServiceTest {
         payment.setUpdatedAt(LocalDateTime.of(2026, 8, 5, 0, 10));
 
         request = mock(CreatePaymentRequest.class);
+        lenient().when(request.getMethod()).thenReturn(PaymentMethod.CREDIT_CARD);
     }
 
     @Test
@@ -109,9 +116,24 @@ class PaymentServiceTest {
     }
 
     @Test
+    void payOrderRejectsIdempotencyKeyLongerThanDatabaseLimit() {
+        assertThrows(
+                InvalidIdempotencyKeyException.class,
+                () -> paymentService.payOrder(10, request, "k".repeat(256))
+        );
+
+        verifyNoInteractions(
+                paymentRepository,
+                orderRepository,
+                idempotencyRecordRepository,
+                outboxEventService
+        );
+    }
+
+    @Test
     void payOrderReturnsExistingPaymentFromFirstIdempotencyLookup() {
         String path = "/api/orders/10/payments";
-        IdempotencyRecord record = new IdempotencyRecord("key-1", path, 20);
+        IdempotencyRecord record = idempotencyRecord("key-1", path, CREDIT_CARD_FINGERPRINT, 20);
 
         when(idempotencyRecordRepository.findByIdempotencyKeyAndRequestPath("key-1", path))
                 .thenReturn(Optional.of(record));
@@ -128,9 +150,32 @@ class PaymentServiceTest {
     }
 
     @Test
+    void payOrderRejectsReusedKeyWithDifferentPayload() {
+        String path = "/api/orders/10/payments";
+        IdempotencyRecord record = idempotencyRecord(
+                "key-conflict",
+                path,
+                "f1c2d1c9590efedb31bdb7c66bc2011bfbf904838580d9e3852fc6f33f8065ff",
+                20
+        );
+
+        when(idempotencyRecordRepository.findByIdempotencyKeyAndRequestPath(
+                "key-conflict",
+                path
+        )).thenReturn(Optional.of(record));
+
+        assertThrows(
+                IdempotencyConflictException.class,
+                () -> paymentService.payOrder(10, request, "key-conflict")
+        );
+
+        verifyNoInteractions(paymentRepository, orderRepository, outboxEventService);
+    }
+
+    @Test
     void payOrderThrowsWhenIdempotencyRecordReferencesMissingPayment() {
         String path = "/api/orders/10/payments";
-        IdempotencyRecord record = new IdempotencyRecord("key-1", path, 999);
+        IdempotencyRecord record = idempotencyRecord("key-1", path, CREDIT_CARD_FINGERPRINT, 999);
 
         when(idempotencyRecordRepository.findByIdempotencyKeyAndRequestPath("key-1", path))
                 .thenReturn(Optional.of(record));
@@ -147,7 +192,7 @@ class PaymentServiceTest {
     @Test
     void payOrderReturnsExistingPaymentFromSecondLookupAfterLock() {
         String path = "/api/orders/10/payments";
-        IdempotencyRecord record = new IdempotencyRecord("key-2", path, 20);
+        IdempotencyRecord record = idempotencyRecord("key-2", path, CREDIT_CARD_FINGERPRINT, 20);
 
         when(idempotencyRecordRepository.findByIdempotencyKeyAndRequestPath("key-2", path))
                 .thenReturn(Optional.empty())
@@ -237,8 +282,6 @@ class PaymentServiceTest {
 
     @Test
     void payOrderPersistsPaymentIdempotencyRecordOrderAndOutboxEvent() {
-        when(request.getMethod()).thenReturn(PaymentMethod.CREDIT_CARD);
-
         String path = "/api/orders/10/payments";
 
         when(idempotencyRecordRepository.findByIdempotencyKeyAndRequestPath("key-7", path))
@@ -273,7 +316,11 @@ class PaymentServiceTest {
         IdempotencyRecord savedRecord = recordCaptor.getValue();
         assertEquals("key-7", savedRecord.getIdempotencyKey());
         assertEquals(path, savedRecord.getRequestPath());
+        assertEquals(CREDIT_CARD_FINGERPRINT, savedRecord.getRequestFingerprint());
         assertEquals(20, savedRecord.getPaymentId());
+        assertEquals(200, savedRecord.getResponseStatus());
+        assertNotNull(savedRecord.getExpiresAt());
+        assertTrue(savedRecord.getExpiresAt().isAfter(LocalDateTime.now().plusHours(23)));
 
         verify(orderRepository).save(order);
         verify(outboxEventService).saveEvent(
@@ -319,6 +366,22 @@ class PaymentServiceTest {
         assertThrows(
                 PaymentNotFoundException.class,
                 () -> paymentService.getPaymentByOrder(10)
+        );
+    }
+
+    private IdempotencyRecord idempotencyRecord(
+            String key,
+            String path,
+            String fingerprint,
+            Integer paymentId
+    ) {
+        return new IdempotencyRecord(
+                key,
+                path,
+                fingerprint,
+                paymentId,
+                200,
+                LocalDateTime.now().plusHours(24)
         );
     }
 }

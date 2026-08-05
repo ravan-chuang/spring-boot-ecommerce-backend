@@ -18,4 +18,7 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT order FROM Order order WHERE order.id = :orderId")
     Optional<Order> findByIdForUpdate(@Param("orderId") Integer orderId);
+
+    @Query("SELECT order.user.id FROM Order order WHERE order.id = :orderId")
+    Optional<Integer> findOwnerIdById(@Param("orderId") Integer orderId);
 }

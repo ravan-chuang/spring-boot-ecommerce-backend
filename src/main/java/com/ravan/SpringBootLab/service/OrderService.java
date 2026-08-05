@@ -226,8 +226,8 @@ public class OrderService {
 
     @Transactional
     public OrderResponse cancelOrder(Integer orderId) {
-        Order order = orderRepository.findById(orderId)
-        .orElseThrow(() -> new OrderNotFoundException(orderId));
+        Order order = orderRepository.findByIdForUpdate(orderId)
+                .orElseThrow(() -> new OrderNotFoundException(orderId));
         
         if (order.getStatus() != OrderStatus.PENDING) {
                 throw new InvalidOrderStatusException(
