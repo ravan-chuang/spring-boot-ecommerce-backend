@@ -1,7 +1,6 @@
 package com.ravan.SpringBootLab.security;
 
 import com.ravan.SpringBootLab.exception.OrderNotFoundException;
-import com.ravan.SpringBootLab.model.Order;
 import com.ravan.SpringBootLab.model.User;
 import com.ravan.SpringBootLab.repository.OrderRepository;
 import com.ravan.SpringBootLab.repository.UserRepository;
@@ -57,10 +56,10 @@ public class CurrentUserService {
             return;
         }
 
-        Order order = orderRepository.findById(orderId)
+        Integer ownerId = orderRepository.findOwnerIdById(orderId)
                 .orElseThrow(() -> new OrderNotFoundException(orderId));
 
-        if (!order.getUser().getId().equals(currentUser.getId())) {
+        if (!ownerId.equals(currentUser.getId())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
         }
     }

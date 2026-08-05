@@ -172,4 +172,28 @@ public class GlobalExceptionHandler {
         
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
     }
+
+    @ExceptionHandler(InvalidIdempotencyKeyException.class)
+    public ResponseEntity<Map<String, Object>> handleInvalidIdempotencyKeyException(
+            InvalidIdempotencyKeyException ex
+    ) {
+        Map<String, Object> body = new HashMap<>();
+
+        body.put("status", 400);
+        body.put("message", ex.getMessage());
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+    }
+
+    @ExceptionHandler(IdempotencyConflictException.class)
+    public ResponseEntity<Map<String, Object>> handleIdempotencyConflictException(
+            IdempotencyConflictException ex
+    ) {
+        Map<String, Object> body = new HashMap<>();
+
+        body.put("status", 409);
+        body.put("message", ex.getMessage());
+
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+    }
 }

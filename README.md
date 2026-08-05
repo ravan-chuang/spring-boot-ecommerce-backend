@@ -18,6 +18,8 @@ Key engineering properties:
 
 - Order or payment state and its outbound event are committed in one PostgreSQL transaction, closing the database/Kafka dual-write gap.
 - Concurrent payment attempts for one order are serialized by a PostgreSQL pessimistic lock, a one-payment-per-order database constraint, and a second idempotency lookup after the lock is acquired.
+- Payment cancellation and payment acquisition use the same order lock, so competing terminal transitions cannot both succeed.
+- HTTP idempotency is backed by a unique key/path constraint, SHA-256 request fingerprints, a persisted response reference/status, and a 24-hour retention horizon.
 - Multiple outbox workers cooperate through `FOR UPDATE SKIP LOCKED`, per-instance claim ownership, and an expiring processing lease.
 - Kafka retry topics, dead-letter topics, and a transactionally persisted processed-event marker support at-least-once delivery.
 - Short-lived JWT access tokens are paired with opaque refresh tokens, token hashing, rotation, and per-device session revocation.
@@ -26,22 +28,22 @@ Key engineering properties:
 
 ## Verified Engineering Baseline
 
-The documentation baseline is the local working tree verified on 2026-08-05 at Git `HEAD ffbe94e`. Verification ran against an isolated repository snapshot and did not alter the original repository's `target/` directory or databases.
+The documentation baseline is the local working tree verified on 2026-08-05, based on Git `HEAD 79971f8` plus the Phase 1 hardening changes described here.
 
 | Verification | Result |
 |---|---:|
 | Maven command | `./mvnw --batch-mode --no-transfer-progress clean verify` |
 | Build | **SUCCESS** |
-| Test suites | 23 |
-| Tests | 104 |
-| Passed / failed / errors / skipped | **104 / 0 / 0 / 0** |
+| Test suites | 24 |
+| Tests | 113 |
+| Passed / failed / errors / skipped | **113 / 0 / 0 / 0** |
 | Testcontainers | PostgreSQL 16 Alpine, Redis 7 Alpine, Kafka 4.1.0 |
-| JaCoCo instruction coverage | **81.48%** |
-| JaCoCo branch coverage | **68.29%** |
-| JaCoCo line coverage | **80.87%** |
+| JaCoCo instruction coverage | **87.24%** |
+| JaCoCo branch coverage | **71.43%** |
+| JaCoCo line coverage | **86.57%** |
 | Maven coverage gate | **Passed**: instruction >= 70%, branch >= 50% |
 | Coverage baseline check | **Passed**: maximum allowed drop 0.50 percentage points |
-| Maven time | 43.776 seconds on the local verification environment |
+| Maven time | 43.246 seconds on the local verification environment |
 
 > On JDK 25, Mockito's inline mock maker cannot self-attach in some restricted environments. This verification explicitly loaded the Byte Buddy agent. That is a test-runtime accommodation; no product code, assertions, tests, or coverage rules were changed or skipped.
 
@@ -83,15 +85,15 @@ The code follows controller, security, service, repository, model, DTO, event, e
 
 | Asset | Count | Responsibility |
 |---|---:|---|
-| Main Java source files | 97 | Product code and configuration |
+| Main Java source files | 99 | Product code and configuration |
 | Controllers | 7 | Auth, User, Product, Cart, Order, Payment, Outbox Admin |
 | Services | 19 | Domain, auth, outbox, Kafka, audit, retention, metrics |
 | Repositories | 9 | Spring Data JPA persistence and locking |
 | Model and enum files | 13 | 9 JPA entities and 4 lifecycle enums |
 | DTO files | 24 | Request, response, validation, and pagination contracts |
-| Exception files | 12 | Domain exceptions and global mapping |
-| Flyway migrations | 8 | Schema versions V1 through V8 |
-| Test source files | 24 | 23 suites plus one shared Testcontainers base |
+| Exception files | 14 | Domain exceptions and global mapping |
+| Flyway migrations | 9 | Schema versions V1 through V9 |
+| Test source files | 25 | 24 suites plus one shared Testcontainers base |
 | k6 scenarios | 6 | Load, stress, soak, arrival-rate, and payment idempotency |
 | Grafana dashboards | 2 | Performance and outbox operations |
 
@@ -118,20 +120,21 @@ Creating an order performs the following work in one transaction:
 5. Delete the cart items.
 6. Insert a `PENDING` `ORDER_CREATED` outbox event.
 
-Cancellation accepts only a `PENDING` order, restores stock, and changes the order to `CANCELLED`. `/orders/slow` intentionally delays for five seconds to demonstrate an optimistic-lock race. It is a lab endpoint and should be replaced by a test harness in a production API.
+Cancellation accepts only a `PENDING` order, acquires the same pessimistic order lock as payment, restores stock, and changes the order to `CANCELLED`. A scalar owner-ID authorization query avoids loading a stale order entity before lock acquisition. `/orders/slow` intentionally delays for five seconds to demonstrate an optimistic-lock race. It is a lab endpoint and should be replaced by a test harness in a production API.
 
 ### Payment and HTTP Idempotency
 
 `POST /api/orders/{orderId}/payments` requires an `Idempotency-Key` header. The service:
 
 1. Looks up an existing result by `(idempotencyKey, requestPath)`.
-2. acquires a `PESSIMISTIC_WRITE` lock on the order.
-3. Repeats the idempotency lookup after acquiring the lock to close the check-then-act race.
-4. Requires a `PENDING` order with no existing payment.
-5. Persists a `PAID` payment and the idempotency record, then changes the order to `PAID`.
-6. Inserts a `PAYMENT_PAID` outbox event in the same transaction.
+2. Compares the stored SHA-256 request fingerprint and returns HTTP 409 when the same key/path is reused with a different payment method.
+3. Acquires a `PESSIMISTIC_WRITE` lock on the order.
+4. Repeats the idempotency lookup after acquiring the lock to close the check-then-act race.
+5. Requires a `PENDING` order with no existing payment.
+6. Persists a `PAID` payment, response status, payment response reference, fingerprint, and 24-hour expiry metadata, then changes the order to `PAID`.
+7. Inserts a `PAYMENT_PAID` outbox event in the same transaction.
 
-The primary concurrency guarantees are the order lock and `payments.order_id UNIQUE`. The current migration gives `idempotency_records` a non-unique `(key, path)` index, not a unique constraint. A generalized idempotency contract should add a unique key, request fingerprint, stored response, expiry, and cleanup.
+The database enforces both `payments.order_id UNIQUE` and `UNIQUE (idempotency_key, request_path)`. Idempotency keys are trimmed, required, and limited to 255 characters. The payment row is the durable response reference, allowing a retry to reconstruct the same response. A future cleanup workflow should define deletion timing and whether a serialized response snapshot is needed for immutable historical replay.
 
 ## Transactional Outbox and Kafka Reliability
 
@@ -182,9 +185,9 @@ stateDiagram-v2
 - `auth.events{action,outcome}` exposes security-event counts.
 - `USER` and `ADMIN` roles protect product writes, outbox administration, and Actuator metrics. Cart, order, and payment routes also enforce owner-or-admin access.
 
-### Critical Authorization Boundary
+### Closed Authorization Boundary
 
-`/api/users/**` is a legacy CRUD surface currently reached by `anyRequest().permitAll()` in `SecurityConfig`. It is not production-safe account management. Before deployment, remove it or restrict it to explicit admin and self-service policies, eliminate overlap with `/api/auth/register`, and add privilege-escalation tests.
+The legacy `/api/users/**` CRUD surface now has an explicit policy: collection reads and legacy creation require `ADMIN`; item reads, updates, and deletion require the resource owner or `ADMIN`. Anonymous, cross-user, normal-user collection, and administrator flows are covered by integration tests. Unmatched routes now terminate at `anyRequest().denyAll()` instead of falling through to public access. The remaining design concern is overlap between legacy admin-created users and `/api/auth/register`, not an unauthenticated access path.
 
 Other identity boundaries include the lack of immediate access-token revocation, rate limiting, account lockout, password reset, email verification, and MFA. Swagger and OpenAPI are public at the application layer and should be disabled or restricted by environment in a production deployment.
 
@@ -208,11 +211,11 @@ Normal successful responses use `ApiResponse<T>`. Validation failures return a f
 
 | Method | Endpoint | Access | Purpose |
 |---|---|---|---|
-| `POST` | `/api/users` | **Currently public** | Legacy user creation |
-| `GET` | `/api/users` | **Currently public** | User pagination and sorting |
-| `GET` | `/api/users/{id}` | **Currently public** | User detail |
-| `PUT` | `/api/users/{id}` | **Currently public** | Legacy user update |
-| `DELETE` | `/api/users/{id}` | **Currently public** | Legacy user deletion |
+| `POST` | `/api/users` | Admin | Legacy user creation |
+| `GET` | `/api/users` | Admin | User pagination and sorting |
+| `GET` | `/api/users/{id}` | Owner or admin | User detail |
+| `PUT` | `/api/users/{id}` | Owner or admin | Legacy user update |
+| `DELETE` | `/api/users/{id}` | Owner or admin | Legacy user deletion |
 | `POST` | `/api/products` | Admin | Create a product |
 | `GET` | `/api/products` | Public | Paginated and sorted catalog |
 | `GET` | `/api/products/{id}` | Public | Redis-cached product detail |
@@ -255,7 +258,7 @@ The 30 auth, commerce, and admin mappings exclude Actuator and documentation end
 | `orders` | Order total and state | User index |
 | `order_items` | Purchase-time product snapshots | Order and product indexes |
 | `payments` | One payment per order | `order_id UNIQUE` |
-| `idempotency_records` | HTTP idempotency result pointer | Non-unique key/path index |
+| `idempotency_records` | HTTP idempotency result and replay metadata | Unique key/path; payment FK; fingerprint, status, and expiry |
 | `outbox_events` | Durable outbound events | Status, creation, and processing indexes |
 | `processed_events` | Consumer deduplication marker | `(event_id, consumer_name)` primary key |
 | `order_event_audit` | `ORDER_CREATED` audit side effect | Unique event ID |
@@ -272,6 +275,7 @@ Flyway migrations:
 6. `V6__create_refresh_tokens.sql`: hashed refresh tokens.
 7. `V7__add_refresh_token_sessions.sql`: multi-device session metadata.
 8. `V8__create_auth_audit_logs.sql`: authentication audit trail.
+9. `V9__harden_payment_idempotency.sql`: unique request identity, fingerprint, response metadata, expiry, and payment foreign key.
 
 Hibernate uses `ddl-auto=validate` and `open-in-view=false`. Flyway exclusively owns schema changes; application startup fails when entity mappings and migrations disagree.
 
@@ -412,8 +416,9 @@ Artifacts:
 | `OrderFlowIntegrationTest` | 2 | API integration | Order plus outbox and complete cart-to-order-to-payment flow |
 | `OutboxAdminControllerIntegrationTest` | 2 | API integration | USER denial and ADMIN replay of a failed event |
 | `OutboxMetricsAuthorizationIntegrationTest` | 2 | API integration | USER and ADMIN authorization for metrics |
-| `PaymentControllerIntegrationTest` | 4 | API integration | Payment outbox, repeat key, concurrent same key, missing key |
+| `PaymentControllerIntegrationTest` | 7 | API integration | Payment outbox, replay, payload conflict, DB uniqueness, same-key concurrency, pay/cancel race, missing key |
 | `ProductControllerIntegrationTest` | 8 | API integration | Public reads, admin writes, USER write denial |
+| `UserAuthorizationIntegrationTest` | 4 | API integration | Anonymous denial, self-service isolation, admin collection and profile management |
 | `AuthAuditIntegrationTest` | 4 | DB/metrics integration | Success/failure audit, session revoke, logout-all |
 | `EventRetentionCleanupIntegrationTest` | 1 | DB integration | Deletes only rows beyond retention windows |
 | `KafkaConsumerIdempotencyIntegrationTest` | 1 | Kafka/DB integration | Duplicate delivery creates one audit row |
@@ -428,22 +433,22 @@ Artifacts:
 | `OrderServiceTest` | 9 | Unit | Creation, snapshots, stock, cart clearing, cancellation, failures |
 | `OutboxEventPublisherTest` | 5 | Unit | Empty claim, stale claim, publish, retry, terminal failure |
 | `OutboxMetricsTest` | 3 | Unit | Counters, batch guards, status gauges |
-| `PaymentServiceTest` | 13 | Unit | Idempotency, locking edge cases, state validation, persistence, outbox |
+| `PaymentServiceTest` | 15 | Unit | Key validation, fingerprint conflict, replay, locking, state validation, persistence, outbox |
 | `ProductServiceTest` | 8 | Unit | CRUD mapping, pagination, missing resources |
-| **Total** | **104** | **62 unit/component + 42 integration** | **104 passed; 0 failed, errors, or skipped** |
+| **Total** | **113** | **64 unit/component + 49 integration** | **113 passed; 0 failed, errors, or skipped** |
 
 ### Coverage Results
 
 | Counter | Covered | Missed | Total | Coverage |
 |---|---:|---:|---:|---:|
-| Instruction | 5,102 | 1,160 | 6,262 | **81.48%** |
-| Branch | 112 | 52 | 164 | **68.29%** |
-| Line | 1,399 | 331 | 1,730 | **80.87%** |
-| Complexity | 466 | 158 | 624 | **74.68%** |
-| Method | 426 | 116 | 542 | **78.60%** |
-| Class | 84 | 6 | 90 | **93.33%** |
+| Instruction | 5,638 | 825 | 6,463 | **87.24%** |
+| Branch | 120 | 48 | 168 | **71.43%** |
+| Line | 1,541 | 239 | 1,780 | **86.57%** |
+| Complexity | 516 | 121 | 637 | **81.00%** |
+| Method | 472 | 81 | 553 | **85.35%** |
+| Class | 90 | 2 | 92 | **97.83%** |
 
-The Maven gate requires instruction >= 70% and branch >= 50%. The saved baseline is 81.4756% instruction and 68.2927% branch, with a maximum allowed drop of 0.5 percentage points. The current comparison passed.
+The Maven gate requires instruction >= 70% and branch >= 50%. The saved regression baseline remains 81.4756% instruction and 68.2927% branch, with a maximum allowed drop of 0.5 percentage points. Current coverage is above both baselines, and the comparison passed.
 
 ## Performance and Concurrency Evidence
 
@@ -540,9 +545,8 @@ This is an external infrastructure progress note. The repository contains no Ter
 
 | Priority | Current state | Impact | Recommended action |
 |---|---|---|---|
-| P0 | Legacy `/api/users/**` CRUD is public | Unauthorized users can read, modify, or delete user rows | Remove it or enforce explicit admin/self-service policy and tests |
 | P0 | JWT, database, and Grafana secrets depend on environment files | Secret exposure breaks the security boundary | Use a managed secret store, rotation, and secret scanning |
-| P1 | Idempotency table lacks a unique key and request fingerprint | Generalized idempotency remains ambiguous | Add a unique key, request hash, stored response, expiry, and cleanup |
+| P1 | Idempotency expiry metadata has no cleanup workflow or serialized body snapshot | Retention and long-term replay semantics remain incomplete | Add cleanup, retention metrics, and a response snapshot if immutable replay is required |
 | P1 | Single Kafka broker and RF=1 | No broker-level availability | Use managed or clustered Kafka with replication |
 | P1 | DLT handling is log-only | Terminal records lack an operator workflow | Add DLT inspection/replay, quarantine, and operator audit |
 | P1 | Payment is simulated | The project does not prove a real payment integration | Add a sandbox adapter, provider idempotency, and signed webhooks |
@@ -554,8 +558,8 @@ This is an external infrastructure progress note. The repository contains no Ter
 
 ## Prioritized Roadmap
 
-1. Close the `/api/users` authorization boundary and add self/admin privilege tests.
-2. Add a unique idempotency key, request fingerprint, stored response, expiry, and cleanup.
+1. Add idempotency-record cleanup, retention metrics, and a serialized response snapshot if immutable replay is required.
+2. Remove the slow-order lab endpoint from the normal API surface and define trusted proxy headers.
 3. Establish a stable cloud host, infrastructure as code, domain TLS, protected CI/CD, and rollback evidence.
 4. Move PostgreSQL, Redis, Kafka, and observability state to backed-up, highly available services.
 5. Add OpenTelemetry, correlation IDs, and trace-aware logging.
