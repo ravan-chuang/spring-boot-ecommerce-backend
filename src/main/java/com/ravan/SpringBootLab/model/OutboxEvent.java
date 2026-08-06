@@ -57,6 +57,9 @@ public class OutboxEvent {
     @Column(name = "correlation_id", length = 128)
     private String correlationId;
 
+    @Column(name = "next_attempt_at")
+    private LocalDateTime nextAttemptAt;
+
     public OutboxEvent() {
     }
 
@@ -95,6 +98,7 @@ public class OutboxEvent {
         this.status = OutboxEventStatus.PENDING;
         this.retryCount = 0;
         this.createdAt = LocalDateTime.now();
+        this.nextAttemptAt = this.createdAt;
     }
 
     public UUID getId() {
@@ -153,12 +157,17 @@ public class OutboxEvent {
         return correlationId;
     }
 
+    public LocalDateTime getNextAttemptAt() {
+        return nextAttemptAt;
+    }
+
     public void markPublished() {
         this.status = OutboxEventStatus.PUBLISHED;
         this.publishedAt = LocalDateTime.now();
         this.lastError = null;
         this.processingAt = null;
         this.processingBy = null;
+        this.nextAttemptAt = null;
     }
 
     public void markRetryableFailure(String errorMessage) {
@@ -171,6 +180,7 @@ public class OutboxEvent {
         this.lastError = errorMessage;
         this.processingAt = null;
         this.processingBy = null;
+        this.nextAttemptAt = null;
     }
 
     public void replay() {
@@ -180,6 +190,7 @@ public class OutboxEvent {
         this.publishedAt = null;
         this.processingAt = null;
         this.processingBy = null;
+        this.nextAttemptAt = LocalDateTime.now();
     }
 
     public void claimForProcessing(String instanceId) {
@@ -189,11 +200,19 @@ public class OutboxEvent {
     }
     
     public void releaseForRetry(String errorMessage) {
+        releaseForRetry(errorMessage, LocalDateTime.now());
+    }
+
+    public void releaseForRetry(
+            String errorMessage,
+            LocalDateTime nextAttemptAt
+    ) {
         this.status = OutboxEventStatus.PENDING;
         this.retryCount++;
         this.lastError = errorMessage;
         this.processingAt = null;
         this.processingBy = null;
+        this.nextAttemptAt = nextAttemptAt;
     }
     
     public void recoverExpiredProcessing() {

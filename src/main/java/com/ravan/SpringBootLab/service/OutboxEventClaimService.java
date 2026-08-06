@@ -26,8 +26,24 @@ public class OutboxEventClaimService {
             int batchSize,
             String instanceId
     ) {
+        return claimPendingEvents(
+                batchSize,
+                instanceId,
+                LocalDateTime.now()
+        );
+    }
+
+    @Transactional
+    public List<UUID> claimPendingEvents(
+            int batchSize,
+            String instanceId,
+            LocalDateTime eligibleAt
+    ) {
         List<OutboxEvent> events =
-                outboxEventRepository.findNextPendingEventsForClaim(batchSize);
+                outboxEventRepository.findNextPendingEventsForClaim(
+                        batchSize,
+                        eligibleAt
+                );
 
         events.forEach(event -> event.claimForProcessing(instanceId));
         outboxEventRepository.saveAll(events);

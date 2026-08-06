@@ -152,6 +152,80 @@ class OutboxEventClaimServiceIntegrationTest
         assertNull(recoveredEvent.getProcessingBy());
     }
 
+
+    @Test
+    void shouldNotClaimEventBeforeNextAttemptAt() {
+        OutboxEvent savedEvent = createPendingEvent();
+
+        LocalDateTime futureAttempt =
+                LocalDateTime.now().plusMinutes(10);
+
+        jdbcTemplate.update(
+                """
+                UPDATE outbox_events
+                SET next_attempt_at = ?
+                WHERE id = ?
+                """,
+                Timestamp.valueOf(futureAttempt),
+                savedEvent.getId()
+        );
+
+        List<UUID> claims =
+                outboxEventClaimService.claimPendingEvents(
+                        10,
+                        "worker-a",
+                        LocalDateTime.now()
+                );
+
+        assertTrue(claims.isEmpty());
+
+        OutboxEvent unchangedEvent = outboxEventRepository
+                .findById(savedEvent.getId())
+                .orElseThrow();
+
+        assertEquals(
+                OutboxEventStatus.PENDING,
+                unchangedEvent.getStatus()
+        );
+    }
+
+    @Test
+    void shouldClaimEventWhenNextAttemptAtIsDue() {
+        OutboxEvent savedEvent = createPendingEvent();
+
+        LocalDateTime dueAttempt =
+                LocalDateTime.now().minusSeconds(1);
+
+        jdbcTemplate.update(
+                """
+                UPDATE outbox_events
+                SET next_attempt_at = ?
+                WHERE id = ?
+                """,
+                Timestamp.valueOf(dueAttempt),
+                savedEvent.getId()
+        );
+
+        List<UUID> claims =
+                outboxEventClaimService.claimPendingEvents(
+                        10,
+                        "worker-a",
+                        LocalDateTime.now()
+                );
+
+        assertEquals(List.of(savedEvent.getId()), claims);
+
+        OutboxEvent claimedEvent = outboxEventRepository
+                .findById(savedEvent.getId())
+                .orElseThrow();
+
+        assertEquals(
+                OutboxEventStatus.PROCESSING,
+                claimedEvent.getStatus()
+        );
+        assertEquals("worker-a", claimedEvent.getProcessingBy());
+    }
+
     private OutboxEvent createPendingEvent() {
         return outboxEventRepository.saveAndFlush(
                 new OutboxEvent(

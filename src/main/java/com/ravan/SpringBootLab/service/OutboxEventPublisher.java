@@ -33,12 +33,14 @@ public class OutboxEventPublisher {
     private final long processingLeaseSeconds;
     private final String instanceId;
     private final OutboxMetrics outboxMetrics;
+    private final OutboxRetryPolicy outboxRetryPolicy;
 
     public OutboxEventPublisher(
             OutboxEventRepository outboxEventRepository,
             OutboxEventClaimService outboxEventClaimService,
             EventProducer eventProducer,
             OutboxMetrics outboxMetrics,
+            OutboxRetryPolicy outboxRetryPolicy,
             @Value("${outbox.publisher.max-attempts:10}") int maxAttempts,
             @Value("${outbox.publisher.batch-size:50}") int batchSize,
             @Value("${outbox.publisher.processing-lease-seconds:60}") long processingLeaseSeconds
@@ -47,6 +49,7 @@ public class OutboxEventPublisher {
         this.outboxEventClaimService = outboxEventClaimService;
         this.eventProducer = eventProducer;
         this.outboxMetrics = outboxMetrics;
+        this.outboxRetryPolicy = outboxRetryPolicy;
         this.maxAttempts = maxAttempts;
         this.batchSize = batchSize;
         this.processingLeaseSeconds = processingLeaseSeconds;
@@ -63,7 +66,8 @@ public class OutboxEventPublisher {
         List<UUID> claimedEventIds =
                 outboxEventClaimService.claimPendingEvents(
                         batchSize,
-                        instanceId
+                        instanceId,
+                        LocalDateTime.now()
                 );
 
         outboxMetrics.recordClaimedEvents(claimedEventIds.size());
@@ -139,12 +143,24 @@ public class OutboxEventPublisher {
                         errorMessage
                 );
             } else {
-                event.releaseForRetry(errorMessage);
+                int nextRetryCount = event.getRetryCount() + 1;
+                LocalDateTime nextAttemptAt =
+                        outboxRetryPolicy.calculateNextAttemptAt(
+                                nextRetryCount,
+                                LocalDateTime.now()
+                        );
+
+                event.releaseForRetry(
+                        errorMessage,
+                        nextAttemptAt
+                );
 
                 logger.warn(
-                        "Outbox publish failed; released for retry: id={}, retryCount={}, error={}",
+                        "Outbox publish failed; scheduled retry: "
+                                + "id={}, retryCount={}, nextAttemptAt={}, error={}",
                         event.getId(),
                         event.getRetryCount(),
+                        event.getNextAttemptAt(),
                         errorMessage
                 );
             }

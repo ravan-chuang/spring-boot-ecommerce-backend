@@ -64,3 +64,6 @@ backups/
 
 # Keep the safe environment-variable template in Git
 !.env.example
+
+# Local reliability drill evidence
+verification/reliability_drills_*/

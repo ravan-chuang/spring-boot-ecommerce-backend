@@ -12,12 +12,16 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -38,6 +42,9 @@ class OutboxEventPublisherRetryIntegrationTest
 
     @Autowired
     private OutboxEventPublisher outboxEventPublisher;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     @MockitoBean
     private EventProducer eventProducer;
@@ -75,6 +82,11 @@ class OutboxEventPublisherRetryIntegrationTest
         assertEquals(1, retriedEvent.getRetryCount());
         assertEquals("Kafka broker unavailable", retriedEvent.getLastError());
         assertNotNull(retriedEvent.getCreatedAt());
+        assertNotNull(retriedEvent.getNextAttemptAt());
+        assertTrue(
+                retriedEvent.getNextAttemptAt()
+                        .isAfter(retriedEvent.getCreatedAt())
+        );
 
         verify(eventProducer).send(
                 KafkaTopicConfig.ORDER_CREATED_TOPIC,
@@ -105,7 +117,11 @@ class OutboxEventPublisherRetryIntegrationTest
                 );
 
         outboxEventPublisher.publishPendingEvents();
+
+        makeRetryImmediatelyEligible(savedEvent.getId());
         outboxEventPublisher.publishPendingEvents();
+
+        makeRetryImmediatelyEligible(savedEvent.getId());
         outboxEventPublisher.publishPendingEvents();
 
         OutboxEvent failedEvent = outboxEventRepository
@@ -124,6 +140,21 @@ class OutboxEventPublisherRetryIntegrationTest
                 savedEvent.getId(),
                 null
         );
+    }
+
+    private void makeRetryImmediatelyEligible(UUID eventId) {
+        int updatedRows = jdbcTemplate.update(
+                """
+                UPDATE outbox_events
+                SET next_attempt_at = ?
+                WHERE id = ?
+                  AND status = 'PENDING'
+                """,
+                Timestamp.valueOf(LocalDateTime.now().minusSeconds(1)),
+                eventId
+        );
+
+        assertEquals(1, updatedRows);
     }
 
     private OutboxEvent savePendingOrderEvent(String eventKey, String payload) {
