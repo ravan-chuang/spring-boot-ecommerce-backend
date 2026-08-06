@@ -11,6 +11,7 @@ public record OutboxEventResponse(
         String aggregateId,
         String eventType,
         String topic,
+        String correlationId,
         String payload,
         OutboxEventStatus status,
         Integer retryCount,

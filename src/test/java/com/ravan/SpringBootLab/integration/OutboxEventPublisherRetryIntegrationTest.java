@@ -58,9 +58,11 @@ class OutboxEventPublisherRetryIntegrationTest
                 .when(eventProducer)
                 .send(
                         KafkaTopicConfig.ORDER_CREATED_TOPIC,
+                        null,
                         eventKey,
                         payload,
-                        savedEvent.getId()
+                        savedEvent.getId(),
+                        null
                 );
 
         outboxEventPublisher.publishPendingEvents();
@@ -76,9 +78,11 @@ class OutboxEventPublisherRetryIntegrationTest
 
         verify(eventProducer).send(
                 KafkaTopicConfig.ORDER_CREATED_TOPIC,
+                null,
                 eventKey,
                 payload,
-                savedEvent.getId()
+                savedEvent.getId(),
+                null
         );
     }
 
@@ -93,9 +97,11 @@ class OutboxEventPublisherRetryIntegrationTest
                 .when(eventProducer)
                 .send(
                         KafkaTopicConfig.ORDER_CREATED_TOPIC,
+                        null,
                         eventKey,
                         payload,
-                        savedEvent.getId()
+                        savedEvent.getId(),
+                        null
                 );
 
         outboxEventPublisher.publishPendingEvents();
@@ -112,9 +118,11 @@ class OutboxEventPublisherRetryIntegrationTest
 
         verify(eventProducer, times(3)).send(
                 KafkaTopicConfig.ORDER_CREATED_TOPIC,
+                null,
                 eventKey,
                 payload,
-                savedEvent.getId()
+                savedEvent.getId(),
+                null
         );
     }
 

@@ -1,10 +1,13 @@
 package com.ravan.SpringBootLab.service;
 
 import com.ravan.SpringBootLab.config.KafkaTopicConfig;
+import com.ravan.SpringBootLab.model.DeadLetterEvent;
+import com.ravan.SpringBootLab.observability.CorrelationIds;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.Header;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.kafka.annotation.BackOff;
 import org.springframework.kafka.annotation.DltHandler;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -29,13 +32,16 @@ public class EventConsumer {
 
     private final ProcessedEventService processedEventService;
     private final OrderEventAuditService orderEventAuditService;
+    private final DeadLetterCaptureService deadLetterCaptureService;
 
     public EventConsumer(
             ProcessedEventService processedEventService,
-            OrderEventAuditService orderEventAuditService
+            OrderEventAuditService orderEventAuditService,
+            DeadLetterCaptureService deadLetterCaptureService
     ) {
         this.processedEventService = processedEventService;
         this.orderEventAuditService = orderEventAuditService;
+        this.deadLetterCaptureService = deadLetterCaptureService;
     }
 
     @RetryableTopic(
@@ -85,7 +91,7 @@ public class EventConsumer {
         processWithIdempotency(
                 record,
                 PAYMENT_PAID_CONSUMER,
-                eventId -> processPaymentPaidEvent(record.value())
+                eventId -> processPaymentPaidEvent(eventId, record.value())
         );
     }
 
@@ -93,14 +99,18 @@ public class EventConsumer {
     public void handleDeadLetterMessage(
             ConsumerRecord<String, String> record
     ) {
-        logger.error(
-                "Message moved to DLT: topic={}, partition={}, offset={}, key={}, value={}",
-                record.topic(),
-                record.partition(),
-                record.offset(),
-                record.key(),
-                record.value()
-        );
+        withRecordContext(record, () -> {
+            DeadLetterEvent event = deadLetterCaptureService.capture(record);
+
+            logger.error(
+                    "Message persisted for DLT operations: deadLetterId={}, topic={}, partition={}, offset={}, key={}",
+                    event.getId(),
+                    record.topic(),
+                    record.partition(),
+                    record.offset(),
+                    record.key()
+            );
+        });
     }
 
     private void processWithIdempotency(
@@ -108,24 +118,26 @@ public class EventConsumer {
             String consumerName,
             Consumer<UUID> businessAction
     ) {
-        UUID eventId = extractOutboxEventId(record);
+        withRecordContext(record, () -> {
+            UUID eventId = extractOutboxEventId(record);
 
-        if (eventId == null) {
-            logger.warn(
-                    "Received event without outbox-event-id header; processing without deduplication: topic={}, offset={}",
-                    record.topic(),
-                    record.offset()
+            if (eventId == null) {
+                logger.warn(
+                        "Received event without outbox-event-id header; processing without deduplication: topic={}, offset={}",
+                        record.topic(),
+                        record.offset()
+                );
+
+                businessAction.accept(null);
+                return;
+            }
+
+            processedEventService.processIfFirstTime(
+                    eventId,
+                    consumerName,
+                    () -> businessAction.accept(eventId)
             );
-
-            businessAction.accept(null);
-            return;
-        }
-
-        processedEventService.processIfFirstTime(
-                eventId,
-                consumerName,
-                () -> businessAction.accept(eventId)
-        );
+        });
     }
 
     private UUID extractOutboxEventId(
@@ -171,16 +183,53 @@ public class EventConsumer {
             );
         }
 
-        logger.info("Consumed OrderCreatedEvent: {}", message);
+        logger.info(
+                "Consumed OrderCreatedEvent: eventId={}, payloadBytes={}",
+                eventId,
+                message.getBytes(StandardCharsets.UTF_8).length
+        );
     }
 
-    private void processPaymentPaidEvent(String message) {
+    private void processPaymentPaidEvent(UUID eventId, String message) {
         if (message == null || message.isBlank()) {
             throw new IllegalArgumentException(
                     "PaymentPaidEvent message is empty"
             );
         }
 
-        logger.info("Consumed PaymentPaidEvent: {}", message);
+        logger.info(
+                "Consumed PaymentPaidEvent: eventId={}, payloadBytes={}",
+                eventId,
+                message.getBytes(StandardCharsets.UTF_8).length
+        );
+    }
+
+    private void withRecordContext(
+            ConsumerRecord<String, String> record,
+            Runnable action
+    ) {
+        String previousCorrelationId = MDC.get(CorrelationIds.MDC_KEY);
+        Header correlationHeader = record.headers()
+                .lastHeader(CorrelationIds.KAFKA_HEADER);
+        String candidate = correlationHeader == null
+                || correlationHeader.value() == null
+                ? null
+                : new String(
+                        correlationHeader.value(),
+                        StandardCharsets.UTF_8
+                );
+        String correlationId = CorrelationIds.normalizeOrGenerate(candidate);
+
+        MDC.put(CorrelationIds.MDC_KEY, correlationId);
+
+        try {
+            action.run();
+        } finally {
+            if (previousCorrelationId == null) {
+                MDC.remove(CorrelationIds.MDC_KEY);
+            } else {
+                MDC.put(CorrelationIds.MDC_KEY, previousCorrelationId);
+            }
+        }
     }
 }

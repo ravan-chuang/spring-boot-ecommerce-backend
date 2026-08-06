@@ -1,6 +1,9 @@
 package com.ravan.SpringBootLab.integration;
 
 import com.ravan.SpringBootLab.TestcontainersIntegrationTest;
+import com.ravan.SpringBootLab.model.DeadLetterEvent;
+import com.ravan.SpringBootLab.model.DeadLetterStatus;
+import com.ravan.SpringBootLab.repository.DeadLetterEventRepository;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -11,6 +14,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 import java.time.Duration;
@@ -20,6 +24,8 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 @SpringBootTest(properties = {
         "spring.kafka.listener.auto-startup=true"
@@ -31,6 +37,9 @@ class KafkaRetryDltIntegrationTest extends TestcontainersIntegrationTest {
 
     @Value("${spring.kafka.bootstrap-servers}")
     private String bootstrapServers;
+
+    @Autowired
+    private DeadLetterEventRepository deadLetterEventRepository;
 
     @Test
     void shouldSendEmptyOrderCreatedMessageToDltAfterRetries() throws Exception {
@@ -59,6 +68,7 @@ class KafkaRetryDltIntegrationTest extends TestcontainersIntegrationTest {
                         dltConsumer.poll(Duration.ofMillis(500))) {
 
                     if (testKey.equals(record.key()) && "".equals(record.value())) {
+                        assertPersistedDltRecord(testKey);
                         return;
                     }
                 }
@@ -66,6 +76,28 @@ class KafkaRetryDltIntegrationTest extends TestcontainersIntegrationTest {
 
             fail("Expected the failed message to be published to " + ORDER_CREATED_DLT_TOPIC);
         }
+    }
+
+    private void assertPersistedDltRecord(String testKey) throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+
+        while (System.nanoTime() < deadline) {
+            DeadLetterEvent event = deadLetterEventRepository
+                    .findFirstByMessageKeyOrderByReceivedAtDesc(testKey)
+                    .orElse(null);
+
+            if (event != null) {
+                assertEquals(ORDER_CREATED_DLT_TOPIC, event.getDltTopic());
+                assertEquals(ORDER_CREATED_TOPIC, event.getOriginalTopic());
+                assertEquals(DeadLetterStatus.RECEIVED, event.getStatus());
+                assertNotNull(event.getHeadersJson());
+                return;
+            }
+
+            Thread.sleep(100);
+        }
+
+        fail("Expected the DLT handler to persist terminal record " + testKey);
     }
 
     private Properties producerProperties() {

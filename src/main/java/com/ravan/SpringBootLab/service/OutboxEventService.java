@@ -3,6 +3,7 @@ package com.ravan.SpringBootLab.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ravan.SpringBootLab.model.OutboxEvent;
+import com.ravan.SpringBootLab.observability.CorrelationIds;
 import com.ravan.SpringBootLab.repository.OutboxEventRepository;
 import org.springframework.stereotype.Service;
 
@@ -35,7 +36,8 @@ public class OutboxEventService {
                     aggregateId,
                     eventType,
                     topic,
-                    serializedPayload
+                    serializedPayload,
+                    CorrelationIds.currentOrGenerate()
             );
 
             outboxEventRepository.save(outboxEvent);

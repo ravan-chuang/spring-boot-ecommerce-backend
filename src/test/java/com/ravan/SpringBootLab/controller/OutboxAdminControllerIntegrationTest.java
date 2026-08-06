@@ -69,7 +69,8 @@ class OutboxAdminControllerIntegrationTest extends TestcontainersIntegrationTest
                 "outbox-admin-test-" + UUID.randomUUID(),
                 "ORDER_CREATED",
                 KafkaTopicConfig.ORDER_CREATED_TOPIC,
-                "{\"event\":\"outbox-admin-test\"}"
+                "{\"event\":\"outbox-admin-test\"}",
+                "outbox-admin-correlation"
         );
 
         event.markFailed("Kafka broker unavailable");
@@ -82,6 +83,7 @@ class OutboxAdminControllerIntegrationTest extends TestcontainersIntegrationTest
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("PENDING"))
+                .andExpect(jsonPath("$.data.correlationId").value("outbox-admin-correlation"))
                 .andExpect(jsonPath("$.data.retryCount").value(0))
                 .andExpect(jsonPath("$.data.lastError").doesNotExist());
 

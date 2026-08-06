@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ravan.SpringBootLab.config.KafkaTopicConfig;
 import com.ravan.SpringBootLab.event.OrderCreatedEvent;
 import com.ravan.SpringBootLab.event.PaymentPaidEvent;
+import com.ravan.SpringBootLab.observability.CorrelationIds;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,9 +45,20 @@ public class EventProducer {
             String payload,
             UUID outboxEventId
     ) {
+        send(topic, null, key, payload, outboxEventId, null);
+    }
+
+    public void send(
+            String topic,
+            Integer partition,
+            String key,
+            String payload,
+            UUID outboxEventId,
+            String correlationId
+    ) {
         try {
             ProducerRecord<String, String> record =
-                    new ProducerRecord<>(topic, key, payload);
+                    new ProducerRecord<>(topic, partition, key, payload);
 
             if (outboxEventId != null) {
                 record.headers().add(
@@ -56,13 +68,21 @@ public class EventProducer {
                 );
             }
 
+            if (correlationId != null && !correlationId.isBlank()) {
+                record.headers().add(
+                        CorrelationIds.KAFKA_HEADER,
+                        correlationId.getBytes(StandardCharsets.UTF_8)
+                );
+            }
+
             SendResult<String, String> result = kafkaTemplate.send(record).get();
 
             kafkaTemplate.flush();
 
             logger.info(
-                    "Sent outbox event: eventId={}, topic={}, key={}, partition={}, offset={}",
+                    "Sent outbox event: eventId={}, correlationId={}, topic={}, key={}, partition={}, offset={}",
                     outboxEventId,
+                    correlationId,
                     result.getRecordMetadata().topic(),
                     key,
                     result.getRecordMetadata().partition(),

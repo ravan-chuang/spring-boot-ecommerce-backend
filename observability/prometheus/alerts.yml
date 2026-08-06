@@ -10,6 +10,7 @@ groups:
         annotations:
           summary: "Outbox contains failed events"
           description: "There are {{ $value }} FAILED outbox event(s). Review /api/admin/outbox/failed and replay after fixing the incident."
+          runbook_url: "https://github.com/ravan-chuang/spring-boot-ecommerce-backend/blob/main/observability/runbooks/outbox-failure.md"
 
       - alert: OutboxPublishFailuresDetected
         expr: increase(outbox_publish_failure_total[5m]) > 0
@@ -40,6 +41,7 @@ groups:
         annotations:
           summary: "Spring Boot application target is down"
           description: "Prometheus cannot scrape the Spring Boot application for more than 1 minute."
+          runbook_url: "https://github.com/ravan-chuang/spring-boot-ecommerce-backend/blob/main/observability/runbooks/application-down.md"
 
   - name: spring-boot-auth-security-alerts
     rules:
@@ -52,3 +54,82 @@ groups:
         annotations:
           summary: "Excessive failed login attempts detected"
           description: "{{ $value }} failed login attempts occurred during the last 5 minutes. Review auth_audit_logs for suspicious activity."
+
+  - name: spring-boot-dead-letter-alerts
+    rules:
+      - alert: DeadLetterEventsAwaitingReview
+        expr: dlt_events{status="RECEIVED"} > 0
+        for: 15m
+        labels:
+          severity: warning
+          service: spring-boot-ecommerce-backend
+        annotations:
+          summary: "Dead-letter events require operator review"
+          description: "{{ $value }} terminal Kafka message(s) have not been quarantined or resolved."
+          runbook_url: "https://github.com/ravan-chuang/spring-boot-ecommerce-backend/blob/main/observability/runbooks/dlt-operations.md"
+
+      - alert: DeadLetterReplayLeaseStuck
+        expr: dlt_events{status="REPLAYING"} > 0
+        for: 2m
+        labels:
+          severity: critical
+          service: spring-boot-ecommerce-backend
+        annotations:
+          summary: "Dead-letter replay lease is stuck"
+          description: "A replay has remained in REPLAYING beyond two lease windows."
+          runbook_url: "https://github.com/ravan-chuang/spring-boot-ecommerce-backend/blob/main/observability/runbooks/dlt-operations.md"
+
+      - alert: DeadLetterReplayFailuresDetected
+        expr: increase(dlt_replay_failure_total[10m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+          service: spring-boot-ecommerce-backend
+        annotations:
+          summary: "Dead-letter replay failed"
+          description: "{{ $value }} Kafka replay operation(s) failed in the last 10 minutes."
+          runbook_url: "https://github.com/ravan-chuang/spring-boot-ecommerce-backend/blob/main/observability/runbooks/dlt-operations.md"
+
+  - name: spring-boot-slo-alerts
+    rules:
+      - alert: AvailabilityErrorBudgetFastBurn
+        expr: >-
+          service:http_5xx_ratio:rate5m > 0.072
+          and
+          service:http_5xx_ratio:rate1h > 0.072
+        for: 2m
+        labels:
+          severity: critical
+          service: spring-boot-ecommerce-backend
+          slo: http-availability
+        annotations:
+          summary: "HTTP availability error budget is burning rapidly"
+          description: "The 99.5% availability budget is burning above 14.4x across both the 5-minute and 1-hour windows."
+          runbook_url: "https://github.com/ravan-chuang/spring-boot-ecommerce-backend/blob/main/observability/runbooks/high-error-rate.md"
+
+      - alert: AvailabilityErrorBudgetSlowBurn
+        expr: >-
+          service:http_5xx_ratio:rate30m > 0.03
+          and
+          service:http_5xx_ratio:rate6h > 0.03
+        for: 15m
+        labels:
+          severity: warning
+          service: spring-boot-ecommerce-backend
+          slo: http-availability
+        annotations:
+          summary: "HTTP availability error budget is steadily burning"
+          description: "The 99.5% availability budget is burning above 6x across both the 30-minute and 6-hour windows."
+          runbook_url: "https://github.com/ravan-chuang/spring-boot-ecommerce-backend/blob/main/observability/runbooks/high-error-rate.md"
+
+      - alert: HttpLatencyP95High
+        expr: service:http_latency_p95_seconds:rate5m > 0.75
+        for: 10m
+        labels:
+          severity: warning
+          service: spring-boot-ecommerce-backend
+          slo: http-latency
+        annotations:
+          summary: "HTTP P95 latency exceeds the service objective"
+          description: "P95 latency has exceeded 750 ms for 10 minutes (current value: {{ $value }} seconds)."
+          runbook_url: "https://github.com/ravan-chuang/spring-boot-ecommerce-backend/blob/main/observability/runbooks/high-error-rate.md"

@@ -17,6 +17,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.annotation.DirtiesContext;
 
 import java.time.Duration;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Properties;
 import java.util.UUID;
@@ -54,7 +55,8 @@ class OutboxEventPublisherIntegrationTest extends TestcontainersIntegrationTest 
                 eventKey,
                 "ORDER_CREATED",
                 KafkaTopicConfig.ORDER_CREATED_TOPIC,
-                payload
+                payload,
+                "outbox-integration-correlation"
         );
 
         OutboxEvent savedEvent = outboxEventRepository.saveAndFlush(event);
@@ -76,14 +78,20 @@ class OutboxEventPublisherIntegrationTest extends TestcontainersIntegrationTest 
             assertEquals(OutboxEventStatus.PUBLISHED, publishedEvent.getStatus());
             assertNotNull(publishedEvent.getPublishedAt());
 
-            assertKafkaReceivedEvent(consumer, eventKey, payload);
+            assertKafkaReceivedEvent(
+                    consumer,
+                    eventKey,
+                    payload,
+                    "outbox-integration-correlation"
+            );
         }
     }
 
     private void assertKafkaReceivedEvent(
             KafkaConsumer<String, String> consumer,
             String expectedKey,
-            String expectedPayload
+            String expectedPayload,
+            String expectedCorrelationId
     ) {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
 
@@ -93,6 +101,13 @@ class OutboxEventPublisherIntegrationTest extends TestcontainersIntegrationTest 
 
                 if (expectedKey.equals(record.key())
                         && expectedPayload.equals(record.value())) {
+                    assertEquals(
+                            expectedCorrelationId,
+                            new String(
+                                    record.headers().lastHeader("correlation-id").value(),
+                                    StandardCharsets.UTF_8
+                            )
+                    );
                     return;
                 }
             }

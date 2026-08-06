@@ -54,6 +54,9 @@ public class OutboxEvent {
     @Column(name = "processing_by")
     private String processingBy;
 
+    @Column(name = "correlation_id", length = 128)
+    private String correlationId;
+
     public OutboxEvent() {
     }
 
@@ -64,12 +67,31 @@ public class OutboxEvent {
             String topic,
             String payload
     ) {
+        this(
+                aggregateType,
+                aggregateId,
+                eventType,
+                topic,
+                payload,
+                null
+        );
+    }
+
+    public OutboxEvent(
+            String aggregateType,
+            String aggregateId,
+            String eventType,
+            String topic,
+            String payload,
+            String correlationId
+    ) {
         this.id = UUID.randomUUID();
         this.aggregateType = aggregateType;
         this.aggregateId = aggregateId;
         this.eventType = eventType;
         this.topic = topic;
         this.payload = payload;
+        this.correlationId = correlationId;
         this.status = OutboxEventStatus.PENDING;
         this.retryCount = 0;
         this.createdAt = LocalDateTime.now();
@@ -125,6 +147,10 @@ public class OutboxEvent {
     
     public String getProcessingBy() {
         return processingBy;
+    }
+
+    public String getCorrelationId() {
+        return correlationId;
     }
 
     public void markPublished() {
