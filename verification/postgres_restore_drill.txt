@@ -1,0 +1,16 @@
+PostgreSQL Backup and Restore Drill
+
+Timestamp UTC: 2026-08-06T18:40:31Z
+Backup file: spring_boot_lab_20260806T183619Z.dump
+Backup size bytes: 55436
+Checksum file: spring_boot_lab_20260806T183619Z.dump.sha256
+
+Result: PASS
+Checksum verification: PASS
+Disposable restore database: spring_boot_lab_phase21_restore_verify
+Flyway versions restored: V1-V11
+Latest Flyway version: 11
+next_attempt_at column: verified
+Outbox retry partial index: verified
+Critical foreign keys and unique constraints: verified
+Disposable database cleanup: verified

@@ -2,31 +2,31 @@
 
 [![CI](https://github.com/ravan-chuang/spring-boot-ecommerce-backend/actions/workflows/ci.yml/badge.svg)](https://github.com/ravan-chuang/spring-boot-ecommerce-backend/actions/workflows/ci.yml)
 
-A production-minded e-commerce backend built with Spring Boot, PostgreSQL, Redis, Kafka, JWT authentication, transactional outbox delivery, idempotent consumers, governed dead-letter operations, distributed tracing, service-level objectives, and security-event monitoring.
+A production-minded, distributed event-driven e-commerce backend built with Java 25, Spring Boot 4.1.0, PostgreSQL, Redis, and Kafka. The system combines transactional correctness, secure session management, durable event delivery, governed dead-letter recovery, observability, and executable reliability verification.
 
-This is intentionally more than a CRUD project. It demonstrates how a backend handles durable event delivery, duplicate processing, authorization, token lifecycle management, failure recovery, metrics, alerting, and integration testing with real infrastructure.
+This is intentionally more than a CRUD project. It demonstrates how a backend contains the database/Kafka dual-write problem, coordinates concurrent workers, rejects duplicate payment requests, recovers from broker outages, preserves operator audit history, and verifies backup restoration against a disposable PostgreSQL database.
+
+**Current verified release:** `v1.3.0-phase21-reliability`  
+**Merged milestone:** PR #27, Phase 2.1 reliability verification  
+**Verification date:** 2026-08-07
 
 ---
 
 ## Highlights
 
-- JWT access tokens with refresh-token rotation and revocation
-- Multi-device session management: list sessions, revoke one session, revoke all sessions
-- BCrypt passwords, USER / ADMIN authorization, and resource ownership checks
-- Payment idempotency and optimistic locking for stock consistency
-- Transactional Outbox with retry governance, FAILED state, and ADMIN replay
-- Persisted Kafka dead-letter intake with ADMIN inspection, quarantine, audited replay, and replay-lease recovery
-- End-to-end HTTP/Kafka correlation IDs, OpenTelemetry tracing, structured production logs, Tempo, Loki, and Alloy
-- PostgreSQL `SKIP LOCKED` event claiming and processing-lease recovery
-- Prometheus recording rules, 99.5% availability SLOs, Grafana, Alertmanager, and Discord incident notifications
-- Reproducible k6 capacity tests with provisioned Grafana performance dashboards
-- Authentication audit logs and suspicious-login monitoring
-- Testcontainers integration tests for PostgreSQL, Redis, and Kafka
-- Health-checked Docker Compose runtime with graceful application shutdown
-- PostgreSQL backup/restore verification, privacy-retention, and secret-rotation runbooks and scripts
-- Spring profiles for local, production, and test environments
-- Caddy reverse proxy with production-style private service networking
-- Temporary public demo workflow through Cloudflare Quick Tunnel
+- JWT access tokens with opaque refresh-token rotation, revocation, and multi-device session management
+- USER / ADMIN authorization, self-service ownership checks, and deny-by-default route handling
+- Payment idempotency with database uniqueness, SHA-256 request fingerprints, persisted replay metadata, response snapshot data, and expiry
+- Transactional Outbox with `FOR UPDATE SKIP LOCKED`, processing leases, `next_attempt_at`, exponential backoff, bounded jitter, terminal `FAILED`, and ADMIN replay
+- Kafka retry topics, idempotent consumers, persisted dead-letter intake, quarantine, audited replay, and replay-lease recovery
+- End-to-end correlation IDs across HTTP, MDC, outbox rows, Kafka headers, consumers, DLT evidence, structured logs, and traces
+- OpenTelemetry, Prometheus, Grafana, Tempo, Loki, Alloy, Alertmanager, SLO recording rules, and runbook-linked alerts
+- Executed Kafka outage, Outbox backlog/recovery, failed-login, and PostgreSQL backup/restore drills
+- 146 automated tests with 0 failures, 0 errors, and 0 skipped tests
+- JaCoCo instruction coverage of 89.78% and branch coverage of 73.63%, both above the committed regression baseline
+- Flyway V1-V11 validated on PostgreSQL 16
+- GitHub Actions CI and CodeQL verification, Dependabot maintenance, and release tag `v1.3.0-phase21-reliability`
+- Docker Compose delivery with health checks, dependency readiness, graceful shutdown, and a Caddy production-style edge
 
 ---
 
@@ -49,7 +49,7 @@ This is intentionally more than a CRUD project. It demonstrates how a backend ha
 
 ```mermaid
 flowchart TD
-    Client[Browser / Swagger / curl] --> Caddy[Caddy Reverse Proxy :80 / :443]
+    Client[Browser / Swagger / curl] --> Caddy[Caddy Reverse Proxy]
     Caddy --> API[Spring Boot REST API]
     API --> Security[Spring Security + JWT]
     Security --> Auth[Auth / Session Services]
@@ -57,50 +57,47 @@ flowchart TD
     Auth --> RefreshTokens[(refresh_tokens)]
     Auth --> AuthAudit[(auth_audit_logs)]
 
-    API --> Services[Business Services]
-    Services --> PostgreSQL[(PostgreSQL)]
-    Services --> Redis[(Redis Cache)]
-    Services --> Outbox[(outbox_events)]
+    API --> Domain[Domain Services]
+    Domain --> PostgreSQL[(PostgreSQL)]
+    Domain --> Redis[(Redis Cache)]
+    Domain --> Outbox[(outbox_events)]
 
-    Outbox --> Publisher[Scheduled Outbox Publisher]
+    Outbox --> Claim[SKIP LOCKED Claim + Lease]
+    Claim --> Due{next_attempt_at due?}
+    Due -->|yes| Publisher[Outbox Publisher]
+    Due -->|no| Outbox
     Publisher --> Kafka[Kafka]
-    Kafka --> Consumer[Kafka Consumers]
+    Publisher -->|failure| RetryPolicy[Backoff + Bounded Jitter]
+    RetryPolicy --> Outbox
+    Publisher -->|max attempts| Failed[FAILED / ADMIN Replay]
+
+    Kafka --> Consumer[Idempotent Consumers]
     Consumer --> Processed[(processed_events)]
-    Consumer --> OrderAudit[(order_event_audit)]
-    Kafka --> Retry[Retry Topics]
-    Retry --> DLT[Dead-Letter Topics]
+    Consumer --> RetryTopics[Retry Topics]
+    RetryTopics --> DLT[Dead-Letter Topics]
     DLT --> DLTStore[(dead_letter_events)]
-    Admin[ADMIN Operator] --> DLTAPI[DLT Operations API]
+    Operator[ADMIN Operator] --> DLTAPI[DLT Operations API]
     DLTAPI --> DLTStore
     DLTAPI --> Kafka
+    DLTAPI --> DLTAudit[(dead_letter_audit_logs)]
 
-    API --> Metrics[Micrometer]
-    Metrics --> Prometheus[Prometheus]
-    Prometheus --> Grafana[Grafana]
-    Prometheus --> Alertmanager[Alertmanager]
-    Alertmanager --> Discord[Discord #backend-alerts]
+    API --> Prometheus[Prometheus]
     API --> OTel[OpenTelemetry Collector]
-    OTel --> Tempo[Tempo Traces]
     API --> JSONLogs[Structured JSON Logs]
+    OTel --> Tempo[Tempo]
     JSONLogs --> Alloy[Grafana Alloy]
-    Alloy --> Loki[Loki Logs]
+    Alloy --> Loki[Loki]
+    Prometheus --> Grafana[Grafana]
     Tempo --> Grafana
     Loki --> Grafana
-
-    subgraph Private Docker Network
-      API
-      PostgreSQL
-      Redis
-      Kafka
-      Prometheus
-      Grafana
-      Alertmanager
-      OTel
-      Tempo
-      Loki
-      Alloy
-    end
+    Prometheus --> Alertmanager[Alertmanager]
 ```
+
+### Distributed-system scope
+
+The project is accurately described as a **small-scale distributed event-driven backend system**. The application, PostgreSQL, Redis, Kafka, and telemetry services run as separate networked processes and exercise real distributed-systems concerns: partial failure, at-least-once delivery, duplicate processing, retry scheduling, durable coordination, idempotency, correlation, and recovery.
+
+The current deployment is still a **single-host Docker Compose topology** with one application instance, one Kafka broker, one PostgreSQL node, and one Redis node. It is production-minded and distribution-aware, but it is not yet a highly available multi-node production platform.
 
 ---
 
@@ -205,15 +202,15 @@ GET    /actuator/metrics/**                  ADMIN only
 
 ## Transactional Outbox and Kafka Delivery
 
-Order and payment changes must not be committed independently from their Kafka events. The project uses the Transactional Outbox pattern to reduce the dual-write consistency problem.
+Order and payment changes must not commit independently from their outbound Kafka events. The project uses a Transactional Outbox so the business state and durable event intent share one PostgreSQL transaction.
 
 ```text
 Create Order / Pay Order
 → persist business data
 → persist PENDING outbox event in the same PostgreSQL transaction
 → commit once
-→ background publisher claims event
-→ publish to Kafka
+→ publisher claims only due events
+→ publish synchronously and wait for Kafka acknowledgement
 → mark PUBLISHED
 ```
 
@@ -224,37 +221,59 @@ order-created
 payment-paid
 ```
 
-### Outbox states
+### Outbox states and scheduling
 
 ```text
-PENDING      Waiting to be published or retried
-PROCESSING   Claimed by one publisher instance
-PUBLISHED    Successfully published to Kafka
-FAILED       Retry limit reached; operator action required
+PENDING      Durable event waiting for its next eligible attempt
+PROCESSING   Claimed by one publisher instance under a processing lease
+PUBLISHED    Kafka acknowledged the record
+FAILED       Maximum attempts reached; operator action required
+```
+
+Flyway V11 adds `next_attempt_at` and a partial pending-event index:
+
+```sql
+CREATE INDEX idx_outbox_events_pending_next_attempt
+ON outbox_events (next_attempt_at, created_at)
+WHERE status = 'PENDING';
+```
+
+The claim query selects only events whose retry time is due. Failed sends are returned to `PENDING` with a calculated next attempt:
+
+```text
+base delay × 2^(retry_count)
+→ capped at configured maximum
+→ randomized by bounded jitter
+→ stored in next_attempt_at
+```
+
+Default configuration:
+
+```properties
+outbox.publisher.retry-base-delay-seconds=5
+outbox.publisher.retry-max-delay-seconds=300
+outbox.publisher.retry-jitter-factor=0.20
 ```
 
 ### Multi-instance-safe claiming
 
-The publisher uses PostgreSQL row locking with:
+The publisher uses PostgreSQL row locking:
 
 ```sql
 SELECT ...
+FROM outbox_events
+WHERE status = 'PENDING'
+  AND (next_attempt_at IS NULL OR next_attempt_at <= :now)
+ORDER BY next_attempt_at, created_at
 FOR UPDATE SKIP LOCKED
+LIMIT :limit;
 ```
 
-This allows multiple application instances to claim different pending events without concurrently publishing the same event.
-
-A processing lease protects against an instance stopping after it has claimed an event:
-
-```text
-PROCESSING lease expires
-→ recovery job returns event to PENDING
-→ another instance may claim it
-```
+This allows cooperating publisher instances to claim separate due events without overlapping ownership. A processing lease returns abandoned `PROCESSING` records to `PENDING` after an interrupted worker.
 
 ### Failed-event replay
 
-ADMIN users can inspect failed events and schedule replay:
+ADMIN users can inspect terminal events and return them to immediate eligibility:
 
 ```text
 GET  /api/admin/outbox/failed
@@ -268,8 +287,13 @@ FAILED
 → PENDING
 → retry_count reset
 → last_error cleared
+→ next_attempt_at reset to immediate eligibility
 → publisher retries Kafka delivery
 ```
+
+### Verified failure behavior
+
+The executed reliability drill stopped Kafka, inserted synthetic Outbox records, observed a claimed record remain `PROCESSING` while the synchronous producer waited for failure, and then confirmed a scheduled retry after the producer timeout. During the same outage, 54 pending events were observed. After Kafka recovery, 55 synthetic events were published and the backlog drained.
 
 ---
 
@@ -390,30 +414,32 @@ Operator procedures are documented in `observability/runbooks/dlt-operations.md`
 
 ### Payment idempotency
 
-The payment endpoint requires an `Idempotency-Key`:
+The payment endpoint requires an `Idempotency-Key`. PostgreSQL enforces one payment per order and one replay record per `(idempotency_key, request_path)`.
 
-```http
-Idempotency-Key: pay-order-10-001
-```
+Each replay record stores:
 
-When the same key is retried, the API returns the previous payment result instead of creating a duplicate charge.
+- a SHA-256 request fingerprint;
+- the request path and idempotency key;
+- response status and payment reference;
+- persisted response snapshot metadata;
+- a 24-hour expiry timestamp.
 
-### Optimistic locking
+Reusing the same key for a different request is rejected. Concurrent duplicate submissions resolve to one logical payment and one replay record.
 
-Product stock uses JPA optimistic locking with an entity version column.
+### Order state and stock consistency
 
-```text
-Concurrent orders
-→ version conflict detected
-→ one transaction retries or fails safely
-→ overselling is prevented
-```
+- Product stock uses JPA optimistic locking.
+- Payment obtains a pessimistic lock on the order before changing `PENDING` to `PAID`.
+- Cancellation uses the same order lock, restores stock, and changes `PENDING` to `CANCELLED`.
+- Database uniqueness prevents duplicate payment rows.
+
+The repository contains payment concurrency and terminal-state conflict coverage. A dedicated high-iteration cancel-versus-pay race drill remains a useful additional hardening item before claiming production-proven behavior under sustained contention.
 
 ---
 
 ## Flyway Schema Migrations
 
-Flyway manages all PostgreSQL schema changes.
+Flyway manages all PostgreSQL schema changes, while Hibernate uses `ddl-auto=validate`.
 
 ```text
 V1__init_schema.sql
@@ -426,23 +452,17 @@ V7__add_refresh_token_sessions.sql
 V8__create_auth_audit_logs.sql
 V9__harden_payment_idempotency.sql
 V10__create_dead_letter_operations.sql
+V11__add_outbox_retry_schedule.sql
 ```
 
-Hibernate validates the schema instead of auto-updating it:
+V11 introduces:
 
-```properties
-spring.jpa.hibernate.ddl-auto=validate
-spring.flyway.enabled=true
-spring.flyway.locations=classpath:db/migration
+```text
+outbox_events.next_attempt_at
+idx_outbox_events_pending_next_attempt
 ```
 
-Check migration history:
-
-```bash
-docker exec -it spring_boot_lab_postgres \
-  psql -U ravan -d spring_boot_lab \
-  -c "SELECT installed_rank, version, description, success FROM flyway_schema_history;"
-```
+The migration was applied against the running PostgreSQL 16 Compose database, and the disposable restore drill independently confirmed Flyway V1-V11, the new column, and the partial pending-retry index.
 
 ---
 
@@ -697,35 +717,63 @@ increase(auth_events_total{action="login",outcome="failure"}[5m]) >= 5
 
 ### Verified incident workflows
 
-#### 1. Kafka outage and operational recovery
+The repository now includes `scripts/run_reliability_drills.sh`, which creates timestamped evidence under an ignored `verification/reliability_drills_*` directory and performs bounded cleanup.
+
+#### 1. Kafka outage and Outbox retry scheduling
 
 ```text
-Kafka outage
-→ business transaction still commits
-→ outbox event remains durable in PostgreSQL
-→ publisher retries
-→ event reaches FAILED
-→ Prometheus and Alertmanager fire warning / critical alerts
-→ Discord receives FIRING notifications
-→ Kafka recovers
-→ ADMIN replays the failed event
-→ event becomes PUBLISHED
-→ Discord receives RESOLVED notifications
+Kafka stopped
+→ five synthetic Outbox events inserted
+→ events claimed under a processing lease
+→ synchronous Kafka send fails after producer timeout
+→ at least one event returns to PENDING
+→ retry_count increments
+→ next_attempt_at is scheduled by backoff + jitter
 ```
 
-#### 2. Suspicious failed-login activity
+Verified result:
 
 ```text
-Failed login × 5
-→ auth_events_total increments
-→ Grafana Login Failures panel increases
-→ ExcessiveLoginFailures enters PENDING
-→ rule fires after 1 minute
-→ Discord receives FIRING notification
-→ after the time window expires
-→ alert resolves
-→ Discord receives RESOLVED notification
+Kafka outage drill: PASS
+Kafka events with scheduled retry: 1
 ```
+
+#### 2. Outbox backlog and recovery
+
+```text
+Kafka remains unavailable
+→ 50 additional synthetic events inserted
+→ backlog remains durable in PostgreSQL
+→ Kafka restarts
+→ publisher drains due records
+```
+
+Verified result:
+
+```text
+Pending events observed during outage: 54
+Events published after recovery: 55
+Backlog drained after recovery
+```
+
+#### 3. Suspicious failed-login activity
+
+```text
+50 invalid login attempts
+→ HTTP failure responses captured
+→ auth_audit_logs increases by 50
+→ authentication metrics and alert rules remain queryable
+```
+
+Verified result:
+
+```text
+Login attack drill: PASS
+Failed-login audit increase: 50
+Application final health: healthy
+```
+
+These are controlled local reliability drills, not claims of multi-region resilience or commercial production availability.
 
 ### Local observability URLs
 
@@ -974,6 +1022,7 @@ PostgreSQL, Redis, Kafka, and the application have Compose health checks. Depend
 ```text
 scripts/postgres_backup.sh
 scripts/postgres_restore_verify.sh
+scripts/run_reliability_drills.sh
 scripts/privacy_retention_check.sh
 scripts/secret_rotation_check.sh
 
@@ -986,9 +1035,17 @@ observability/runbooks/secret-rotation.md
 observability/runbooks/privacy-retention.md
 ```
 
-The restore verifier accepts only an explicitly authorized disposable database whose name ends in `_restore_verify`, validates Flyway history and core row counts, and removes the scratch database on exit. Backup artifacts are written under the ignored `backups/` directory by default. The secret check inspects tracked content without printing credential values.
+The executed PostgreSQL drill produced a custom-format backup, verified its SHA-256 checksum, restored it into `spring_boot_lab_phase21_restore_verify`, and checked:
 
-The scripts passed shell syntax checks and the targeted tracked-secret scan. A live production backup/restore drill is deliberately not claimed by the repository verification; execute and record it against an approved disposable environment.
+- Flyway V1-V11 history;
+- row counts for users, orders, payments, Outbox, authentication audit, and DLT tables;
+- `next_attempt_at` type and nullability;
+- `idx_outbox_events_pending_next_attempt`;
+- DLT, audit, and idempotency primary, foreign-key, and unique constraints.
+
+The disposable database was removed by the cleanup trap. Backup artifacts remain ignored under `backups/`. This verifies restore mechanics in the local Compose environment; it does not establish a production RPO or RTO.
+
+The reliability script performs Kafka outage, Outbox backlog/recovery, and failed-login drills, captures evidence, verifies final health, restarts Kafka during cleanup, and deletes synthetic records.
 
 ---
 
@@ -1018,65 +1075,57 @@ docker compose up -d
 
 ## Testing
 
-The integration suite uses Testcontainers with real:
+The suite uses Testcontainers with real PostgreSQL, Redis, and Kafka infrastructure.
 
-```text
-PostgreSQL
-Redis
-Kafka
-```
-
-Run all tests:
+Run the complete verification lifecycle:
 
 ```bash
-./mvnw clean test
+./mvnw --batch-mode --no-transfer-progress clean verify
+python3 scripts/coverage_baseline.py
+docker compose config --quiet
+git diff --check
 ```
 
-Current expected result:
+Verified result on 2026-08-07:
 
 ```text
-Tests run: 135, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 146, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
+Coverage baseline check passed
 ```
-
-Verified on August 6, 2026 with Java 25, Spring Boot 4.1.0, PostgreSQL 16, Redis 7, and Apache Kafka through Testcontainers:
 
 | Evidence | Result |
 |---|---:|
-| Automated tests | 135 passed |
+| Automated tests | 146 passed |
 | Test failures / errors / skipped | 0 / 0 / 0 |
-| Instruction coverage | 89.62% (7,517 / 8,388) |
-| Branch coverage | 73.19% (202 / 276) |
-| Line coverage | 89.27% (2,081 / 2,331) |
+| Instruction coverage | 89.78% |
+| Branch coverage | 73.63% |
 | JaCoCo gate | Instruction >= 70%, branch >= 50% |
-| Regression baseline check | Passed (81.48% instruction, 68.29% branch baseline; max 0.50-point drop) |
-| Flyway | V1-V10 applied and validated |
-| Prometheus configuration | Valid; 11 alerts and 7 recording rules |
-| OTel / Tempo / Loki / Alloy configuration | Validated with pinned container binaries |
+| Regression baseline | 81.48% instruction, 68.29% branch; maximum 0.50-point drop |
+| Flyway | V1-V11 applied and validated |
+| PostgreSQL restore verification | Passed against a disposable database |
+| Kafka outage drill | Passed |
+| Outbox backlog/recovery drill | Passed |
+| Failed-login drill | Passed |
 | Docker Compose model | `docker compose config --quiet` passed |
+| Secret-pattern scan | No findings in the checked repository scope |
+| CI / CodeQL | Passed on the Phase 2.1 branch before merge |
 
-Key coverage includes:
+New Phase 2.1 behavioral coverage includes:
 
-```text
-Authentication and authorization
-Refresh-token rotation and logout revocation
-Multi-device session management
-Authentication audit logs and metrics
-Product ADMIN authorization
-User ownership checks
-Payment idempotency
-Order flow and optimistic locking
-Kafka retry / DLT
-Persisted DLT capture, deduplication, ADMIN authorization, quarantine, audit, replay, replay failure, and lease recovery
-Transactional Outbox publishing and retry governance
-ADMIN failed-event replay
-Multi-instance event claiming and lease recovery
-Idempotent Kafka consumers
-Consumer-side audit effects
-Prometheus metric authorization
-Event-retention cleanup
-HTTP-to-Kafka correlation propagation and structured trace context
-```
+- exponential backoff growth;
+- bounded jitter;
+- maximum-delay capping;
+- immediate first-attempt eligibility;
+- replay resetting an event for immediate processing;
+- due-time filtering in the claim query;
+- concurrent non-overlapping claims with `SKIP LOCKED`;
+- retry scheduling after Kafka publication failure;
+- transition to `FAILED` after maximum attempts;
+- Flyway V11 runtime migration;
+- executed incident and restore drills.
+
+The broader suite also covers authentication, authorization, session rotation, payment idempotency, stock locking, Kafka retry-to-DLT behavior, governed DLT operations, consumer deduplication, retention, correlation propagation, metrics authorization, and application startup.
 
 For Docker Desktop on macOS:
 
@@ -1084,13 +1133,7 @@ For Docker Desktop on macOS:
 export DOCKER_HOST=unix://$HOME/.docker/run/docker.sock
 ```
 
-The project also includes:
-
-```text
-src/test/resources/docker-java.properties
-```
-
-with a compatible Docker Java API version.
+The repository also includes `src/test/resources/docker-java.properties` for a compatible Docker Java API version.
 
 ---
 
@@ -1209,55 +1252,40 @@ docker-compose.prod.yml     # production Compose overlay
 
 ## Engineering Concepts Practiced
 
-- REST API design and layered architecture
-- JWT authorization and ownership checks
-- Refresh-token rotation, revocation, and session management
-- Audit logging and security-event monitoring
-- BCrypt password hashing
-- PostgreSQL transactions and Flyway migrations
-- Optimistic locking
-- Payment idempotency
+- REST API design, layered architecture, and deny-by-default authorization
+- JWT access control, opaque refresh-token rotation, revocation, and multi-device sessions
+- PostgreSQL transactions, pessimistic and optimistic locking, and Flyway migration discipline
+- Payment idempotency, request fingerprinting, replay metadata, response snapshots, and expiry
 - Redis caching
-- Kafka event-driven architecture
-- Retry topics and dead-letter topics
-- Persisted DLT state machines, operator authorization, audit trails, and replay leases
-- Transactional Outbox pattern
-- Multi-instance event processing with `SKIP LOCKED`
-- Lease recovery
-- At-least-once delivery and consumer idempotency
-- Micrometer custom metrics
-- End-to-end correlation IDs and MDC hygiene
-- OpenTelemetry tracing and structured Logstash JSON
-- Tempo trace storage, Loki log storage, and Alloy collection
-- SLI recording rules, multi-window error-budget alerts, and runbooks
-- k6 load testing, latency SLOs, and capacity validation
-- PromQL, Grafana provisioning, alert rules, Alertmanager routing
-- Incident lifecycle validation
-- Docker Compose infrastructure
-- Dependency health checks and graceful shutdown
-- Safe backup/restore verification and secret-rotation automation
-- Testcontainers integration testing
-- GitHub Actions CI
+- Kafka event-driven delivery, retry topics, dead-letter topics, and at-least-once semantics
+- Transactional Outbox, due-time scheduling, exponential backoff, bounded jitter, leases, and terminal failure governance
+- Multi-worker coordination with `FOR UPDATE SKIP LOCKED`
+- Idempotent consumers with transactionally persisted processed-event markers
+- Persisted DLT state machines, operator authorization, audit trails, replay reservations, and lease recovery
+- Correlation IDs, MDC hygiene, structured JSON logging, and OpenTelemetry tracing
+- Prometheus metrics, SLI recording rules, error-budget alerts, Grafana dashboards, Loki, Tempo, and Alloy
+- Failure injection, backlog recovery, failed-login auditing, and backup/restore verification
+- Testcontainers integration testing, JaCoCo regression gates, CI, CodeQL, and release tagging
+- Evidence boundaries that distinguish local verification from production-proven capability
 
 ---
 
 ## Future Improvements
 
-- Rate limiting and temporary account lockout for brute-force protection
-- Persistent cloud deployment with a real domain and named Cloudflare Tunnel or VM
-- Cloud deployment with private observability networking
-- CI/CD deployment pipeline
-- Write-path load tests for payment idempotency, stock contention, and Outbox/Kafka recovery
-- External secret manager, workload identity / IAM, HTTPS, and production network policies
-- Automated DLT retention after privacy/legal policy approval
-- Encrypted off-host backup storage plus scheduled restore-drill evidence
-- Trace tail sampling and production retention/cost tuning
-- Contract testing and end-to-end browser/API workflow tests
-- User-facing frontend or admin console
-- Retention cleanup for auth audit logs and expired refresh tokens
-
----
-
+- Kubernetes Deployment, Service, Ingress, HPA, PodDisruptionBudget, and rolling-update verification
+- Multiple Spring Boot instances with load balancing and failover testing
+- Three-broker Kafka or a managed replicated Kafka service
+- PostgreSQL replication, automated failover, connection pooling, and documented RPO/RTO
+- Redis Sentinel, Redis Cluster, or a managed cache service
+- Infrastructure as code for cloud networking, compute, IAM, secrets, DNS, and observability
+- External secret manager, workload identity, image scanning, and SBOM generation
+- Real payment-provider sandbox integration, signed webhooks, and reconciliation
+- Rate limiting, temporary account lockout, password reset, email verification, and MFA
+- Dedicated repeated cancel-versus-pay race testing under real PostgreSQL contention
+- Representative write-path, million-event Kafka, soak, and recovery-throughput benchmarks
+- Approved lifecycle and erasure policies for DLT, audit, Outbox, refresh-token, and idempotency data
+- Production telemetry sampling, retention, cost controls, and alert tuning
+- Long-running external synthetic checks, incident postmortems, MTTR evidence, and error-budget review
 
 ---
 
@@ -1265,70 +1293,81 @@ docker-compose.prod.yml     # production Compose overlay
 
 ### Continuous Integration
 
-- GitHub Actions CI on every push and pull request
+- GitHub Actions CI with `push`, `pull_request`, and `workflow_dispatch`
 - Maven `clean verify`
 - Testcontainers integration tests
-- JaCoCo HTML/XML reports
-- Surefire test reports uploaded as workflow artifacts
-- JaCoCo quality gate enforced during `verify`
+- JaCoCo HTML/XML reports and committed coverage regression baseline
+- Surefire and JaCoCo workflow artifacts
+- CodeQL Java/Kotlin `security-extended` analysis
+- Dependabot maintenance
 
-### Current Quality Baseline
+### Current verified baseline
 
 | Metric | Status |
 |---|---:|
-| Unit + Integration Tests | **135** |
-| Test Failures | **0** |
-| Test Errors | **0** |
-| Skipped Tests | **0** |
-| Instruction Coverage | **89.62%** |
-| Branch Coverage | **73.19%** |
-| Line Coverage | **89.27%** |
-| Coverage Gate | **Instruction ≥ 70%, Branch ≥ 50%** |
-| Coverage Regression Baseline | **Passed** |
+| Release | **v1.3.0-phase21-reliability** |
+| Unit + integration tests | **146** |
+| Failures / errors / skipped | **0 / 0 / 0** |
+| Instruction coverage | **89.78%** |
+| Branch coverage | **73.63%** |
+| Coverage gate | **Instruction >= 70%, Branch >= 50%** |
+| Coverage regression baseline | **Passed** |
+| Flyway | **V1-V11 validated** |
+| Reliability incident drills | **Passed** |
+| PostgreSQL backup/restore drill | **Passed** |
 | Local `clean verify` | **Passing** |
+| Phase 2.1 branch CI / CodeQL | **Passing** |
 
-The build fails automatically if coverage drops below the configured quality gate.
+Coverage is treated as a regression signal, while lock behavior, retry timing, failure recovery, deduplication, authorization, and restore evidence provide the stronger correctness argument.
 
 ---
 
 ## Repository Engineering Practices
 
-- Pull-request based development
-- GitHub Actions CI
-- JaCoCo coverage reporting
-- JaCoCo coverage quality gates
-- Testcontainers integration testing
-- Docker Compose development environment
-- Production profile separation
-- Infrastructure as Code
-- Conventional Commit messages
+- Pull-request based development and squash merges
+- Conventional commit messages and milestone release tags
+- GitHub Actions CI, CodeQL, Dependabot, and manual verification dispatch
+- JaCoCo quality gates and coverage regression checks
+- Testcontainers integration testing against real infrastructure
+- Docker Compose development and production-style overlays
+- Versioned Prometheus, Grafana, OpenTelemetry, Tempo, Loki, Alloy, and runbook configuration
+- Guarded backup/restore and reliability drill scripts
+- Tracked-secret checks and ignored runtime evidence / backup artifacts
+- Explicit distinction between verified capability and production boundary
 - MIT License
+
+Cloud infrastructure as code is a planned next phase; the current repository uses versioned Compose and observability configuration but does not yet contain a complete Terraform or Pulumi deployment.
 
 ---
 
 ## Roadmap
 
-### Short Term
+### Completed: Phase 1 - P0 hardening
 
-- Execute and record a disposable PostgreSQL backup/restore drill
-- Add automated DLT retention after policy approval
-- Add API contract and broader end-to-end tests
-- Add SpotBugs and OWASP dependency analysis with reviewed suppression policy
+- Protected legacy user CRUD with ADMIN / self-service rules
+- Added anonymous, cross-user, and role-boundary verification
+- Hardened payment idempotency with uniqueness, fingerprinting, replay metadata, response data, and expiry
+- Preserved order-state correctness with shared locking and concurrency coverage
+- Maintained a passing coverage regression baseline
 
-### Mid Term
+### Completed: Phase 2 and Phase 2.1 - event operations and reliability
 
-- Cloud deployment (OCI / AWS)
-- Kubernetes deployment
-- HTTPS with a production domain
-- GitHub Actions deployment pipeline
-- External secret manager and encrypted backup storage
+- Governed DLT query, quarantine, replay, operator audit, metrics, and lease recovery
+- Correlation IDs, structured logging, OpenTelemetry, Tempo, Loki, and Alloy
+- `next_attempt_at`, exponential backoff, bounded jitter, and due-time claim filtering
+- Kafka outage, Outbox backlog/recovery, and failed-login drills
+- Executed PostgreSQL backup/checksum/disposable-restore verification
+- 146 passing tests, Flyway V1-V11, CI, CodeQL, PR #27 merge, and release tag `v1.3.0-phase21-reliability`
 
-### Long Term
+### Next: Phase 3 - cloud-native and highly available delivery
 
-- Horizontal scaling
-- Chaos testing
-- Blue/Green deployment
-- Tail-based trace sampling and multi-region observability retention
+1. Kubernetes deployment with rolling updates, health gates, autoscaling, and rollback evidence.
+2. Infrastructure as code and a verified cloud deployment behind domain TLS.
+3. Replicated or managed PostgreSQL, Kafka, and Redis topology with failover drills.
+4. Large-scale write-path, Kafka throughput, recovery, and soak benchmarks.
+5. SRE operating evidence: RPO/RTO, MTTR, postmortems, error-budget review, and scheduled restore drills.
+6. Real payment-provider sandbox integration, signed webhooks, and reconciliation.
+7. Managed secrets, IAM, SBOM, image scanning, retention automation, and privacy controls.
 
 ## License
 
