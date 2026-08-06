@@ -37,14 +37,19 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID> 
                     SELECT *
                     FROM outbox_events
                     WHERE status = 'PENDING'
-                    ORDER BY created_at ASC
+                      AND (
+                          next_attempt_at IS NULL
+                          OR next_attempt_at <= :eligibleAt
+                      )
+                    ORDER BY next_attempt_at ASC, created_at ASC
                     FOR UPDATE SKIP LOCKED
                     LIMIT :limit
                     """,
             nativeQuery = true
     )
     List<OutboxEvent> findNextPendingEventsForClaim(
-            @Param("limit") int limit
+            @Param("limit") int limit,
+            @Param("eligibleAt") LocalDateTime eligibleAt
     );
 
     @Modifying

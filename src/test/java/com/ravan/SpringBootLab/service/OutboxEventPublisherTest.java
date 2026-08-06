@@ -6,6 +6,7 @@ import com.ravan.SpringBootLab.repository.OutboxEventRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -26,6 +27,7 @@ class OutboxEventPublisherTest {
     private OutboxEventClaimService claimService;
     private EventProducer eventProducer;
     private OutboxMetrics metrics;
+    private OutboxRetryPolicy retryPolicy;
     private OutboxEventPublisher publisher;
 
     @BeforeEach
@@ -34,12 +36,14 @@ class OutboxEventPublisherTest {
         claimService = mock(OutboxEventClaimService.class);
         eventProducer = mock(EventProducer.class);
         metrics = mock(OutboxMetrics.class);
+        retryPolicy = mock(OutboxRetryPolicy.class);
 
         publisher = new OutboxEventPublisher(
                 repository,
                 claimService,
                 eventProducer,
                 metrics,
+                retryPolicy,
                 3,
                 10,
                 60
@@ -50,7 +54,11 @@ class OutboxEventPublisherTest {
     void recordsZeroClaimsWhenNoPendingEventsExist() {
         when(claimService.recoverExpiredProcessingEvents(any()))
                 .thenReturn(0);
-        when(claimService.claimPendingEvents(eq(10), anyString()))
+        when(claimService.claimPendingEvents(
+                eq(10),
+                anyString(),
+                any(LocalDateTime.class)
+        ))
                 .thenReturn(List.of());
 
         publisher.publishPendingEvents();
@@ -78,7 +86,11 @@ class OutboxEventPublisherTest {
 
         when(claimService.recoverExpiredProcessingEvents(any()))
                 .thenReturn(2);
-        when(claimService.claimPendingEvents(eq(10), anyString()))
+        when(claimService.claimPendingEvents(
+                eq(10),
+                anyString(),
+                any(LocalDateTime.class)
+        ))
                 .thenReturn(List.of(eventId));
         when(repository.findByIdAndStatusAndProcessingBy(
                 eq(eventId),
@@ -108,7 +120,11 @@ class OutboxEventPublisherTest {
 
         when(claimService.recoverExpiredProcessingEvents(any()))
                 .thenReturn(0);
-        when(claimService.claimPendingEvents(eq(10), anyString()))
+        when(claimService.claimPendingEvents(
+                eq(10),
+                anyString(),
+                any(LocalDateTime.class)
+        ))
                 .thenReturn(List.of(eventId));
         when(repository.findByIdAndStatusAndProcessingBy(
                 eq(eventId),
@@ -140,6 +156,15 @@ class OutboxEventPublisherTest {
         OutboxEvent event = createEvent();
 
         prepareClaimedEvent(event);
+
+        LocalDateTime scheduledAt =
+                LocalDateTime.of(2026, 8, 7, 3, 0);
+
+        when(retryPolicy.calculateNextAttemptAt(
+                eq(1),
+                any(LocalDateTime.class)
+        )).thenReturn(scheduledAt);
+
         doThrow(new RuntimeException("Kafka unavailable"))
                 .when(eventProducer)
                 .send(
@@ -162,6 +187,11 @@ class OutboxEventPublisherTest {
         assertThat(event.getLastError()).isEqualTo("Kafka unavailable");
         assertThat(event.getProcessingAt()).isNull();
         assertThat(event.getProcessingBy()).isNull();
+        assertThat(event.getNextAttemptAt()).isEqualTo(scheduledAt);
+        verify(retryPolicy).calculateNextAttemptAt(
+                eq(1),
+                any(LocalDateTime.class)
+        );
     }
 
     @Test
@@ -197,7 +227,11 @@ class OutboxEventPublisherTest {
     private void prepareClaimedEvent(OutboxEvent event) {
         when(claimService.recoverExpiredProcessingEvents(any()))
                 .thenReturn(0);
-        when(claimService.claimPendingEvents(eq(10), anyString()))
+        when(claimService.claimPendingEvents(
+                eq(10),
+                anyString(),
+                any(LocalDateTime.class)
+        ))
                 .thenReturn(List.of(event.getId()));
         when(repository.findByIdAndStatusAndProcessingBy(
                 eq(event.getId()),
