@@ -57,6 +57,7 @@ public class OutboxAdminService {
                 event.getAggregateId(),
                 event.getEventType(),
                 event.getTopic(),
+                event.getCorrelationId(),
                 event.getPayload(),
                 event.getStatus(),
                 event.getRetryCount(),

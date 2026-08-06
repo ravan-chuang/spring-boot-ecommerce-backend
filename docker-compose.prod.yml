@@ -45,6 +45,18 @@ services:
     restart: unless-stopped
     ports: !reset []
 
+  otel-collector:
+    restart: unless-stopped
+
+  tempo:
+    restart: unless-stopped
+
+  loki:
+    restart: unless-stopped
+
+  alloy:
+    restart: unless-stopped
+
 volumes:
   caddy_data:
   caddy_config:

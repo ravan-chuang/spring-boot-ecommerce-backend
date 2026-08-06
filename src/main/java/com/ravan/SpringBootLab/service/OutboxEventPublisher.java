@@ -106,9 +106,11 @@ public class OutboxEventPublisher {
         try {
             eventProducer.send(
                     event.getTopic(),
+                    null,
                     event.getAggregateId(),
                     event.getPayload(),
-                    event.getId()
+                    event.getId(),
+                    event.getCorrelationId()
             );
 
             event.markPublished();

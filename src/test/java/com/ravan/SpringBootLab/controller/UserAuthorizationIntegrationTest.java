@@ -150,4 +150,19 @@ class UserAuthorizationIntegrationTest extends TestcontainersIntegrationTest {
     private String updateRequest(String name, String skill) {
         return createRequest(name, skill);
     }
+
+    @Test
+    void shouldAllowAnonymousLivenessProbe() throws Exception {
+        mockMvc.perform(get("/actuator/health/liveness"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("UP"));
+    }
+
+    @Test
+    void shouldAllowAnonymousReadinessProbe() throws Exception {
+        mockMvc.perform(get("/actuator/health/readiness"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("UP"));
+    }
+
 }

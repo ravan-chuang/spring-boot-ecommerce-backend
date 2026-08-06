@@ -4,6 +4,7 @@ global:
 
 rule_files:
   - /etc/prometheus/alerts.yml
+  - /etc/prometheus/slo-rules.yml
 
 alerting:
   alertmanagers:

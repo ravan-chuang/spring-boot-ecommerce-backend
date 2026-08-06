@@ -1,5 +1,6 @@
 package com.ravan.SpringBootLab.security;
 
+import com.ravan.SpringBootLab.observability.CorrelationIdFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -21,7 +22,8 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(
             HttpSecurity http,
-            JwtAuthenticationFilter jwtAuthenticationFilter
+            JwtAuthenticationFilter jwtAuthenticationFilter,
+            CorrelationIdFilter correlationIdFilter
     ) throws Exception {
         return http
                 .csrf(csrf -> csrf.disable())
@@ -36,6 +38,7 @@ public class SecurityConfig {
                                 "/swagger-ui/**",
                                 "/v3/api-docs/**",
                                 "/actuator/health",
+                                "/actuator/health/**",
                                 "/actuator/info"
                         ).permitAll()
 
@@ -70,6 +73,7 @@ public class SecurityConfig {
                         .anyRequest().denyAll()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(correlationIdFilter, JwtAuthenticationFilter.class)
                 .build();
     }
 }

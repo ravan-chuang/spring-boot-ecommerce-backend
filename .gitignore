@@ -60,6 +60,7 @@ observability/secrets/
 prometheus_data/
 grafana_data/
 alertmanager_data/
+backups/
 
 # Keep the safe environment-variable template in Git
 !.env.example

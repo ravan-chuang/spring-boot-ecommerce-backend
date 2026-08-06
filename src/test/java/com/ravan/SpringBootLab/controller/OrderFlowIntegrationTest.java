@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ravan.SpringBootLab.model.OutboxEvent;
 import com.ravan.SpringBootLab.model.OutboxEventStatus;
 import com.ravan.SpringBootLab.model.User;
+import com.ravan.SpringBootLab.observability.CorrelationIds;
 import com.ravan.SpringBootLab.repository.OutboxEventRepository;
 import com.ravan.SpringBootLab.repository.UserRepository;
 import com.ravan.SpringBootLab.security.JwtService;
@@ -82,6 +83,7 @@ class OrderFlowIntegrationTest extends TestcontainersIntegrationTest {
         assertEquals("ORDER", event.getAggregateType());
         assertEquals(String.valueOf(orderId), event.getAggregateId());
         assertEquals("ORDER_CREATED", event.getEventType());
+        assertEquals("order-flow-" + testUser.userId(), event.getCorrelationId());
         assertNotNull(event.getCreatedAt());
 
         assertTrue(event.getPayload().contains("\"orderId\":" + orderId));
@@ -142,7 +144,8 @@ class OrderFlowIntegrationTest extends TestcontainersIntegrationTest {
 
     private Integer createOrder(Integer userId, String token) throws Exception {
         String response = mockMvc.perform(post("/api/users/{userId}/orders", userId)
-                        .header("Authorization", "Bearer " + token))
+                        .header("Authorization", "Bearer " + token)
+                        .header(CorrelationIds.HTTP_HEADER, "order-flow-" + userId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("PENDING"))
                 .andReturn()

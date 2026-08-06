@@ -64,8 +64,10 @@ class OutboxEventPublisherTest {
         );
         verify(eventProducer, never()).send(
                 anyString(),
+                any(),
                 anyString(),
                 anyString(),
+                any(),
                 any()
         );
     }
@@ -90,8 +92,10 @@ class OutboxEventPublisherTest {
         verify(metrics).recordClaimedEvents(1);
         verify(eventProducer, never()).send(
                 anyString(),
+                any(),
                 anyString(),
                 anyString(),
+                any(),
                 any()
         );
         verify(repository, never()).save(any(OutboxEvent.class));
@@ -116,9 +120,11 @@ class OutboxEventPublisherTest {
 
         verify(eventProducer).send(
                 event.getTopic(),
+                null,
                 event.getAggregateId(),
                 event.getPayload(),
-                eventId
+                eventId,
+                event.getCorrelationId()
         );
         verify(repository).save(event);
         verify(metrics).recordPublishSuccess();
@@ -138,9 +144,11 @@ class OutboxEventPublisherTest {
                 .when(eventProducer)
                 .send(
                         event.getTopic(),
+                        null,
                         event.getAggregateId(),
                         event.getPayload(),
-                        event.getId()
+                        event.getId(),
+                        event.getCorrelationId()
                 );
 
         publisher.publishPendingEvents();
@@ -167,9 +175,11 @@ class OutboxEventPublisherTest {
                 .when(eventProducer)
                 .send(
                         event.getTopic(),
+                        null,
                         event.getAggregateId(),
                         event.getPayload(),
-                        event.getId()
+                        event.getId(),
+                        event.getCorrelationId()
                 );
 
         publisher.publishPendingEvents();
@@ -202,7 +212,8 @@ class OutboxEventPublisherTest {
                 "order-123",
                 "ORDER_CREATED",
                 "order-created",
-                "{\"orderId\":\"order-123\"}"
+                "{\"orderId\":\"order-123\"}",
+                "publisher-test-correlation"
         );
     }
 }
