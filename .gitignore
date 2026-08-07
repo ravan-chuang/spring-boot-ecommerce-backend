@@ -67,3 +67,6 @@ backups/
 
 # Local reliability drill evidence
 verification/reliability_drills_*/
+
+# Kubernetes local secrets
+k8s/base/*-secret.yaml
