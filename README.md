@@ -2,9 +2,9 @@
 
 [![CI](https://github.com/ravan-chuang/spring-boot-ecommerce-backend/actions/workflows/ci.yml/badge.svg)](https://github.com/ravan-chuang/spring-boot-ecommerce-backend/actions/workflows/ci.yml)
 
-A production-minded, distributed event-driven e-commerce backend built with Java 25, Spring Boot 4.1.0, PostgreSQL, Redis, and Kafka. The system combines transactional correctness, secure session management, durable event delivery, governed dead-letter recovery, observability, and executable reliability verification.
+A production-minded, distributed event-driven e-commerce backend built with Java 25, Spring Boot 4.1.0, PostgreSQL, Redis, and Kafka. The design treats transactional correctness, secure session management, durable event delivery, governed dead-letter recovery, observability, and executable reliability verification as one operating system rather than isolated features.
 
-This is intentionally more than a CRUD project. It demonstrates how a backend contains the database/Kafka dual-write problem, coordinates concurrent workers, rejects duplicate payment requests, recovers from broker outages, preserves operator audit history, and verifies backup restoration against a disposable PostgreSQL database.
+The engineering focus extends beyond CRUD delivery. The repository demonstrates how a backend contains the database/Kafka dual-write boundary, coordinates concurrent Outbox workers, rejects duplicate payment requests, recovers from broker outages, preserves operator audit history, and verifies PostgreSQL restoration against a disposable database. Every major reliability claim is tied to persisted state, automated tests, runtime metrics, or an executed drill.
 
 **Current verified release:** `v1.3.0-phase21-reliability`  
 **Merged milestone:** PR #27, Phase 2.1 reliability verification  
@@ -48,56 +48,66 @@ This is intentionally more than a CRUD project. It demonstrates how a backend co
 ## Architecture
 
 ```mermaid
+%%{init: {"flowchart": {"curve": "basis"}}}%%
 flowchart TD
-    Client[Browser / Swagger / curl] --> Caddy[Caddy Reverse Proxy]
-    Caddy --> API[Spring Boot REST API]
-    API --> Security[Spring Security + JWT]
-    Security --> Auth[Auth / Session Services]
-    Auth --> Users[(users)]
-    Auth --> RefreshTokens[(refresh_tokens)]
-    Auth --> AuthAudit[(auth_audit_logs)]
+    subgraph RequestPath[Request and transaction path]
+        Client[Browser / Swagger / curl] --> Caddy[Caddy Reverse Proxy]
+        Caddy --> API[Spring Boot REST API]
+        API --> Security[Spring Security + JWT]
+        Security --> Auth[Auth / Session Services]
+        API --> Domain[Domain Services]
+        Auth --> Users[(users)]
+        Auth --> RefreshTokens[(refresh_tokens)]
+        Auth --> AuthAudit[(auth_audit_logs)]
+        Domain --> PostgreSQL[(PostgreSQL)]
+        Domain --> Redis[(Redis Cache)]
+        Domain --> Outbox[(outbox_events)]
+    end
 
-    API --> Domain[Domain Services]
-    Domain --> PostgreSQL[(PostgreSQL)]
-    Domain --> Redis[(Redis Cache)]
-    Domain --> Outbox[(outbox_events)]
+    subgraph DeliveryPath[Durable publication and consumer path]
+        Outbox --> Claim[SKIP LOCKED Claim + Lease]
+        Claim --> Due{next_attempt_at due?}
+        Due -->|yes| Publisher[Outbox Publisher]
+        Due -->|no| Outbox
+        Publisher -->|Kafka acknowledged| Kafka[Kafka]
+        Publisher -->|send failure| RetryPolicy[Backoff + Bounded Jitter]
+        RetryPolicy -->|persist next_attempt_at| Outbox
+        Publisher -->|maximum attempts| Failed[FAILED]
+        Failed -->|ADMIN replay| Outbox
 
-    Outbox --> Claim[SKIP LOCKED Claim + Lease]
-    Claim --> Due{next_attempt_at due?}
-    Due -->|yes| Publisher[Outbox Publisher]
-    Due -->|no| Outbox
-    Publisher --> Kafka[Kafka]
-    Publisher -->|failure| RetryPolicy[Backoff + Bounded Jitter]
-    RetryPolicy --> Outbox
-    Publisher -->|max attempts| Failed[FAILED / ADMIN Replay]
+        Kafka --> Consumer[Idempotent Consumers]
+        Consumer --> Processed[(processed_events)]
+        Consumer --> RetryTopics[Retry Topics]
+        RetryTopics --> DLT[Dead-Letter Topics]
+    end
 
-    Kafka --> Consumer[Idempotent Consumers]
-    Consumer --> Processed[(processed_events)]
-    Consumer --> RetryTopics[Retry Topics]
-    RetryTopics --> DLT[Dead-Letter Topics]
-    DLT --> DLTStore[(dead_letter_events)]
-    Operator[ADMIN Operator] --> DLTAPI[DLT Operations API]
-    DLTAPI --> DLTStore
-    DLTAPI --> Kafka
-    DLTAPI --> DLTAudit[(dead_letter_audit_logs)]
+    subgraph GovernedRecovery[Governed dead-letter recovery]
+        DLT --> DLTStore[(dead_letter_events)]
+        Operator[ADMIN Operator] --> DLTAPI[DLT Operations API]
+        DLTAPI --> DLTStore
+        DLTAPI -->|replay to original destination| Kafka
+        DLTAPI --> DLTAudit[(dead_letter_audit_logs)]
+    end
 
-    API --> Prometheus[Prometheus]
-    API --> OTel[OpenTelemetry Collector]
-    API --> JSONLogs[Structured JSON Logs]
-    OTel --> Tempo[Tempo]
-    JSONLogs --> Alloy[Grafana Alloy]
-    Alloy --> Loki[Loki]
-    Prometheus --> Grafana[Grafana]
-    Tempo --> Grafana
-    Loki --> Grafana
-    Prometheus --> Alertmanager[Alertmanager]
+    subgraph Telemetry[Observability and operational response]
+        API --> Prometheus[Prometheus]
+        API --> OTel[OpenTelemetry Collector]
+        API --> JSONLogs[Structured JSON Logs]
+        OTel --> Tempo[Tempo]
+        JSONLogs --> Alloy[Grafana Alloy]
+        Alloy --> Loki[Loki]
+        Prometheus --> Grafana[Grafana]
+        Tempo --> Grafana
+        Loki --> Grafana
+        Prometheus --> Alertmanager[Alertmanager]
+    end
 ```
 
 ### Distributed-system scope
 
-The project is accurately described as a **small-scale distributed event-driven backend system**. The application, PostgreSQL, Redis, Kafka, and telemetry services run as separate networked processes and exercise real distributed-systems concerns: partial failure, at-least-once delivery, duplicate processing, retry scheduling, durable coordination, idempotency, correlation, and recovery.
+The evidence supports describing this repository as a **small-scale distributed event-driven backend system**. The application, PostgreSQL, Redis, Kafka, and telemetry services run as separate networked processes and expose real distributed-systems concerns: partial failure, at-least-once delivery, duplicate processing, retry scheduling, durable coordination, idempotency, correlation, and recovery.
 
-The current deployment is still a **single-host Docker Compose topology** with one application instance, one Kafka broker, one PostgreSQL node, and one Redis node. It is production-minded and distribution-aware, but it is not yet a highly available multi-node production platform.
+The deployment boundary remains explicit: a **single-host Docker Compose topology** with one application instance, one Kafka broker, one PostgreSQL node, and one Redis node. The project demonstrates production-minded design and distribution-aware failure handling; it does not claim highly available, multi-node production operation.
 
 ---
 

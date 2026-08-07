@@ -2,9 +2,9 @@
 
 ## Executive Summary
 
-This repository is a production-minded, small-scale distributed event-driven backend built with Java 25 and Spring Boot 4.1.0. It combines secure authentication, commerce transactions, PostgreSQL consistency controls, Redis caching, Kafka delivery, a Transactional Outbox, idempotent consumers, governed dead-letter operations, end-to-end observability, and executable reliability drills.
+This repository is a production-minded, small-scale distributed event-driven backend built with Java 25 and Spring Boot 4.1.0. Its engineering value is the integration of secure identity, commerce transactions, PostgreSQL consistency controls, Redis caching, Kafka delivery, a Transactional Outbox, idempotent consumers, governed dead-letter operations, end-to-end observability, and executable reliability drills into one evidence-backed system.
 
-The current release is `v1.3.0-phase21-reliability`, produced after PR #27 merged the Outbox retry scheduler and reliability-verification work into `main`. The correct professional positioning is **advanced student-level / strong junior backend and platform engineering evidence**. It demonstrates production reasoning and verified recovery behavior, but it is not yet a highly available or production-proven multi-node service.
+The current release is `v1.3.0-phase21-reliability`, produced after PR #27 merged the Outbox retry scheduler and reliability-verification work into `main`. From a senior engineering review perspective, the implementation shows disciplined reasoning about failure, concurrency, durable state, auditability, and recovery. The evidence still supports an **advanced student-level / strong junior backend and platform engineering** positioning: the project verifies meaningful production mechanics, but it is not yet a highly available or production-proven multi-node service.
 
 ## Verified Project Status
 
@@ -46,40 +46,39 @@ It is therefore distribution-aware and production-minded, not a production-prove
 
 ## System Architecture
 
-```text
-Client
-  -> Caddy edge
-  -> Spring Security + JWT
-  -> REST controllers and ownership authorization
-  -> domain services
-  -> PostgreSQL and Redis
+```mermaid
+%%{init: {"flowchart": {"curve": "basis"}}}%%
+flowchart LR
+    Client[Client] --> Edge[Caddy edge]
+    Edge --> Security[Spring Security + JWT]
+    Security --> API[REST controllers + ownership authorization]
+    API --> Domain[Domain services]
+    Domain --> State[(PostgreSQL + Redis)]
 
-Business transaction
-  -> business rows + PENDING Outbox event in one PostgreSQL transaction
-  -> due-time claim with FOR UPDATE SKIP LOCKED
-  -> processing lease
-  -> synchronous Kafka acknowledgement
-  -> PUBLISHED, scheduled retry, or terminal FAILED
+    Domain -->|business rows + PENDING event in one transaction| Outbox[(outbox_events)]
+    Outbox --> Claim[Due-time claim + processing lease]
+    Claim -->|synchronous Kafka acknowledgement| Kafka[Kafka]
+    Claim -->|send failure| ScheduledRetry[Scheduled retry]
+    ScheduledRetry -->|persist next_attempt_at| Outbox
+    Claim -->|maximum attempts| Failed[FAILED]
+    Failed -->|ADMIN replay| Outbox
 
-Consumer delivery
-  -> retry topics
-  -> transactionally persisted processed-event marker
-  -> audited side effect
-  -> DLT after retry exhaustion
+    Kafka --> Consumer[Idempotent consumer]
+    Consumer --> Marker[(processed_events)]
+    Consumer --> RetryTopics[Retry topics]
+    RetryTopics --> DLT[Dead-letter topic]
+    DLT --> Evidence[(dead_letter_events)]
+    Operator[ADMIN operator] --> Governance[Inspect / quarantine / reserve replay]
+    Governance --> Evidence
+    Governance -->|replay to original topic and partition| Kafka
+    Governance --> Audit[(dead_letter_audit_logs)]
 
-Terminal Kafka failure
-  -> persisted dead_letter_events evidence
-  -> ADMIN inspection and quarantine
-  -> database replay reservation
-  -> replay to original topic and partition
-  -> append-only dead_letter_audit_logs
-
-Operations
-  -> Prometheus + Alertmanager
-  -> Grafana dashboards
-  -> OpenTelemetry Collector + Tempo
-  -> structured JSON logs + Alloy + Loki
-  -> SLO recording rules and runbooks
+    API --> Metrics[Prometheus + Alertmanager]
+    API --> Traces[OpenTelemetry Collector + Tempo]
+    API --> Logs[JSON logs + Alloy + Loki]
+    Metrics --> Grafana[Grafana dashboards]
+    Traces --> Grafana
+    Logs --> Grafana
 ```
 
 PostgreSQL is the system of record for commerce state, token sessions, payment idempotency, Outbox delivery state, consumer deduplication, authentication audit, DLT state, and operator audit history.
@@ -340,7 +339,7 @@ These are saved local profiles, not a production capacity claim. The reliability
 
 ## Professional Assessment
 
-The project is strongest where implementation, state, tests, and operational evidence meet:
+The project is strongest where implementation, durable state, automated verification, and operational evidence converge:
 
 - the Outbox includes claim ownership, due-time scheduling, leases, backoff, jitter, terminal state, replay, metrics, alerts, and outage evidence;
 - DLT handling includes persisted evidence, governance states, replay reservation, audit, recovery, and metrics;
@@ -353,7 +352,7 @@ Recommended positioning:
 
 > A production-minded distributed event-driven e-commerce backend built with Java 25 and Spring Boot 4, featuring secure sessions, transactional consistency, scheduled Outbox retry, Kafka at-least-once safety, governed DLT recovery, cross-boundary observability, executable incident drills, and automated quality gates.
 
-This is strong evidence for backend, Java, platform, DevOps/SRE, or event-driven systems internships and junior roles. It does not replace experience operating a multi-node commercial service.
+This is strong evidence for backend, Java, platform, DevOps/SRE, or event-driven systems internships and junior roles. The judgment is based on implemented invariants and executed evidence—not on architectural vocabulary alone—and it does not replace experience operating a multi-node commercial service.
 
 ## Recommended Next Phase
 
