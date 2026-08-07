@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: spring-boot-lab-config
+  namespace: spring-boot-lab
+data:
+  SPRING_PROFILES_ACTIVE: local
+
+  DB_URL: jdbc:postgresql://postgres:5432/spring_boot_lab
+  DB_USERNAME: ravan
+
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+
+  KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+
+  OTEL_ENABLED: "false"
+
+  OUTBOX_RETRY_BASE_DELAY_SECONDS: "5"
+  OUTBOX_RETRY_MAX_DELAY_SECONDS: "300"
+  OUTBOX_RETRY_JITTER_FACTOR: "0.20"
