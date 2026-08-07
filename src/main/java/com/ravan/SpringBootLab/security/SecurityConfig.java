@@ -42,6 +42,7 @@ public class SecurityConfig {
                                 "/actuator/info"
                         ).permitAll()
 
+                        .requestMatchers("/internal/instance").permitAll()
                         .requestMatchers("/actuator/prometheus").permitAll()
                         .requestMatchers("/actuator/metrics/**").hasRole("ADMIN")
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")

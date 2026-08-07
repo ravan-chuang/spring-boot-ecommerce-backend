@@ -1,0 +1,10 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: spring-boot-lab
+  namespace: spring-boot-lab
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: spring-boot-lab
