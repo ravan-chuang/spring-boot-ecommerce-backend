@@ -1,0 +1,64 @@
+===== MASTER =====
+name
+mymaster
+ip
+redis-0.redis-headless.spring-boot-lab.svc.cluster.local
+port
+6379
+runid
+443e9916b8a67e0d56382a4e750e0d411122bf01
+flags
+master
+link-pending-commands
+0
+link-refcount
+1
+last-ping-sent
+0
+last-ok-ping-reply
+354
+last-ping-reply
+354
+down-after-milliseconds
+5000
+info-refresh
+6480
+role-reported
+master
+role-reported-time
+488542
+config-epoch
+0
+num-slaves
+2
+num-other-sentinels
+2
+quorum
+2
+failover-timeout
+30000
+parallel-syncs
+1
+
+===== QUORUM =====
+OK 3 usable Sentinels. Quorum and failover authorization can be reached
+
+===== REDIS ROLES =====
+--- redis-0 ---
+role:master
+connected_slaves:2
+master_repl_offset:132728
+--- redis-1 ---
+role:slave
+master_host:redis-0.redis-headless.spring-boot-lab.svc.cluster.local
+master_link_status:up
+slave_repl_offset:132911
+connected_slaves:0
+master_repl_offset:132911
+--- redis-2 ---
+role:slave
+master_host:redis-0.redis-headless.spring-boot-lab.svc.cluster.local
+master_link_status:up
+slave_repl_offset:132911
+connected_slaves:0
+master_repl_offset:132911

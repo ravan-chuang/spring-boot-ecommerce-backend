@@ -1,0 +1,71 @@
+===== REDIS PODS =====
+NAME      READY   STATUS    RESTARTS       AGE   IP            NODE                     NOMINATED NODE   READINESS GATES
+redis-0   1/1     Running   1 (104s ago)   21m   10.244.3.5    spring-boot-ha-worker3   <none>           <none>
+redis-1   1/1     Running   0              21m   10.244.1.9    spring-boot-ha-worker2   <none>           <none>
+redis-2   1/1     Running   0              21m   10.244.2.12   spring-boot-ha-worker    <none>           <none>
+
+===== SENTINEL PODS =====
+NAME               READY   STATUS    RESTARTS       AGE   IP            NODE                     NOMINATED NODE   READINESS GATES
+redis-sentinel-0   1/1     Running   1 (105s ago)   12m   10.244.3.2    spring-boot-ha-worker3   <none>           <none>
+redis-sentinel-1   1/1     Running   0              12m   10.244.2.13   spring-boot-ha-worker    <none>           <none>
+redis-sentinel-2   1/1     Running   0              12m   10.244.1.10   spring-boot-ha-worker2   <none>           <none>
+
+===== SENTINEL MASTER =====
+name
+mymaster
+ip
+10.244.1.9
+port
+6379
+runid
+0f2b263253516b38cec6c8cb2070e844a2f3468c
+flags
+master
+link-pending-commands
+0
+link-refcount
+1
+last-ping-sent
+0
+last-ok-ping-reply
+565
+last-ping-reply
+565
+down-after-milliseconds
+5000
+info-refresh
+859
+role-reported
+master
+role-reported-time
+90175
+config-epoch
+1
+num-slaves
+3
+num-other-sentinels
+2
+quorum
+2
+failover-timeout
+30000
+parallel-syncs
+1
+
+===== SENTINEL QUORUM =====
+OK 3 usable Sentinels. Quorum and failover authorization can be reached
+
+===== FINAL REDIS ROLES =====
+--- redis-0 ---
+role:slave
+master_host:10.244.1.9
+master_link_status:up
+connected_slaves:0
+--- redis-1 ---
+role:master
+connected_slaves:2
+--- redis-2 ---
+role:slave
+master_host:10.244.1.9
+master_link_status:up
+connected_slaves:0

@@ -1,0 +1,6 @@
+===== redis-0 =====
+written-after-promotion-20260808T222437Z
+===== redis-1 =====
+written-after-promotion-20260808T222437Z
+===== redis-2 =====
+written-after-promotion-20260808T222437Z

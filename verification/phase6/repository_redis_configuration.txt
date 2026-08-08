@@ -1,0 +1,9 @@
+src/main/resources/application.properties:19:spring.data.redis.host=${REDIS_HOST:localhost}
+src/main/resources/application.properties:20:spring.data.redis.port=${REDIS_PORT:6379}
+src/main/java/com/ravan/SpringBootLab/service/ProductService.java:13:import org.springframework.cache.annotation.CacheEvict;
+src/main/java/com/ravan/SpringBootLab/service/ProductService.java:14:import org.springframework.cache.annotation.Cacheable;
+src/main/java/com/ravan/SpringBootLab/service/ProductService.java:59:    @Cacheable(value = "products", key = "#id")
+src/main/java/com/ravan/SpringBootLab/service/ProductService.java:69:    @CacheEvict(value = "products", key = "#id")
+src/main/java/com/ravan/SpringBootLab/service/ProductService.java:85:    @CacheEvict(value = "products", key = "#id")
+k8s/base/app-configmap.yaml:12:  REDIS_HOST: redis
+k8s/base/app-configmap.yaml:13:  REDIS_PORT: "6379"

@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"v1","kind":"Service","metadata":{"annotations":{},"name":"redis","namespace":"spring-boot-lab"},"spec":{"ports":[{"name":"redis","port":6379,"targetPort":6379}],"selector":{"app":"redis"}}}
+  creationTimestamp: "2026-08-07T17:57:10Z"
+  name: redis
+  namespace: spring-boot-lab
+  resourceVersion: "833"
+  uid: 13ff39bf-8678-40f6-82d2-cc76f87a6fc3
+spec:
+  clusterIP: 10.96.147.158
+  clusterIPs:
+  - 10.96.147.158
+  internalTrafficPolicy: Cluster
+  ipFamilies:
+  - IPv4
+  ipFamilyPolicy: SingleStack
+  ports:
+  - name: redis
+    port: 6379
+    protocol: TCP
+    targetPort: 6379
+  selector:
+    app: redis
+  sessionAffinity: None
+  type: ClusterIP
+status:
+  loadBalancer: {}

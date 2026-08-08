@@ -9,8 +9,10 @@ data:
   DB_URL: jdbc:postgresql://postgres:5432/spring_boot_lab
   DB_USERNAME: ravan
 
-  REDIS_HOST: redis
-  REDIS_PORT: "6379"
+  REDIS_SENTINEL_MASTER: mymaster
+  REDIS_SENTINEL_NODES: "redis-sentinel-0.redis-sentinel-headless.spring-boot-lab.svc.cluster.local:26379,redis-sentinel-1.redis-sentinel-headless.spring-boot-lab.svc.cluster.local:26379,redis-sentinel-2.redis-sentinel-headless.spring-boot-lab.svc.cluster.local:26379"
+  REDIS_CONNECT_TIMEOUT: "2s"
+  REDIS_COMMAND_TIMEOUT: "2s"
 
   KAFKA_BOOTSTRAP_SERVERS: kafka:29092
 

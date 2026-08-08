@@ -1,0 +1,322 @@
+===== spring-boot-lab-54d6d8b686-6dbx2 =====
+2026-08-08T22:23:36.587Z  INFO 1 --- [           main] [spring-boot-lab,,,].s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data Redis repositories in DEFAULT mode.
+2026-08-08T22:23:36.592Z  INFO 1 --- [           main] [spring-boot-lab,,,].RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.ravan.SpringBootLab.repository.CartItemRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-08-08T22:23:36.592Z  INFO 1 --- [           main] [spring-boot-lab,,,].RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.ravan.SpringBootLab.repository.DeadLetterAuditLogRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-08-08T22:23:36.593Z  INFO 1 --- [           main] [spring-boot-lab,,,].RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.ravan.SpringBootLab.repository.DeadLetterEventRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-08-08T22:23:36.593Z  INFO 1 --- [           main] [spring-boot-lab,,,].RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.ravan.SpringBootLab.repository.IdempotencyRecordRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-08-08T22:23:36.593Z  INFO 1 --- [           main] [spring-boot-lab,,,].RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.ravan.SpringBootLab.repository.OrderItemRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-08-08T22:23:36.593Z  INFO 1 --- [           main] [spring-boot-lab,,,].RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.ravan.SpringBootLab.repository.OrderRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-08-08T22:23:36.593Z  INFO 1 --- [           main] [spring-boot-lab,,,].RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.ravan.SpringBootLab.repository.OutboxEventRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-08-08T22:23:36.593Z  INFO 1 --- [           main] [spring-boot-lab,,,].RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.ravan.SpringBootLab.repository.PaymentRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-08-08T22:23:36.593Z  INFO 1 --- [           main] [spring-boot-lab,,,].RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.ravan.SpringBootLab.repository.ProductRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-08-08T22:23:36.594Z  INFO 1 --- [           main] [spring-boot-lab,,,].RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.ravan.SpringBootLab.repository.RefreshTokenRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-08-08T22:23:36.594Z  INFO 1 --- [           main] [spring-boot-lab,,,].RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.ravan.SpringBootLab.repository.UserRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-08-08T22:23:36.594Z  INFO 1 --- [           main] [spring-boot-lab,,,].s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 3 ms. Found 0 Redis repository interfaces.
+	default.api.timeout.ms = 60000
+	request.timeout.ms = 30000
+	sasl.login.connect.timeout.ms = null
+	sasl.login.read.timeout.ms = null
+	session.timeout.ms = 45000
+	socket.connection.setup.timeout.max.ms = 30000
+	socket.connection.setup.timeout.ms = 10000
+	default.api.timeout.ms = 60000
+	request.timeout.ms = 30000
+	sasl.login.connect.timeout.ms = null
+	sasl.login.read.timeout.ms = null
+	session.timeout.ms = 45000
+	socket.connection.setup.timeout.max.ms = 30000
+	socket.connection.setup.timeout.ms = 10000
+	default.api.timeout.ms = 60000
+	request.timeout.ms = 30000
+	sasl.login.connect.timeout.ms = null
+	sasl.login.read.timeout.ms = null
+	session.timeout.ms = 45000
+	socket.connection.setup.timeout.max.ms = 30000
+	socket.connection.setup.timeout.ms = 10000
+	default.api.timeout.ms = 60000
+	request.timeout.ms = 30000
+	sasl.login.connect.timeout.ms = null
+	sasl.login.read.timeout.ms = null
+	session.timeout.ms = 45000
+	socket.connection.setup.timeout.max.ms = 30000
+	socket.connection.setup.timeout.ms = 10000
+	default.api.timeout.ms = 60000
+	request.timeout.ms = 30000
+	sasl.login.connect.timeout.ms = null
+	sasl.login.read.timeout.ms = null
+	session.timeout.ms = 45000
+	socket.connection.setup.timeout.max.ms = 30000
+	socket.connection.setup.timeout.ms = 10000
+	default.api.timeout.ms = 60000
+	request.timeout.ms = 30000
+	sasl.login.connect.timeout.ms = null
+	sasl.login.read.timeout.ms = null
+	session.timeout.ms = 45000
+	socket.connection.setup.timeout.max.ms = 30000
+	socket.connection.setup.timeout.ms = 10000
+	default.api.timeout.ms = 60000
+	request.timeout.ms = 30000
+	sasl.login.connect.timeout.ms = null
+	sasl.login.read.timeout.ms = null
+	session.timeout.ms = 45000
+	socket.connection.setup.timeout.max.ms = 30000
+	socket.connection.setup.timeout.ms = 10000
+	default.api.timeout.ms = 60000
+	request.timeout.ms = 30000
+	sasl.login.connect.timeout.ms = null
+	sasl.login.read.timeout.ms = null
+	session.timeout.ms = 45000
+	socket.connection.setup.timeout.max.ms = 30000
+	socket.connection.setup.timeout.ms = 10000
+	default.api.timeout.ms = 60000
+	request.timeout.ms = 30000
+	sasl.login.connect.timeout.ms = null
+	sasl.login.read.timeout.ms = null
+	session.timeout.ms = 45000
+	socket.connection.setup.timeout.max.ms = 30000
+	socket.connection.setup.timeout.ms = 10000
+	default.api.timeout.ms = 60000
+	request.timeout.ms = 30000
+	sasl.login.connect.timeout.ms = null
+	sasl.login.read.timeout.ms = null
+	session.timeout.ms = 45000
+	socket.connection.setup.timeout.max.ms = 30000
+	socket.connection.setup.timeout.ms = 10000
+        dle1_0.exception_class,
+        dle1_0.exception_message,
+        dle1_0.exception_class,
+        dle1_0.exception_message,
+        dle1_0.exception_class,
+        dle1_0.exception_message,
+        dle1_0.exception_class,
+        dle1_0.exception_message,
+        dle1_0.exception_class,
+        dle1_0.exception_message,
+        dle1_0.exception_class,
+        dle1_0.exception_message,
+===== spring-boot-lab-54d6d8b686-8mt8j =====
+2026-08-08T22:18:52.242Z  INFO 1 --- [           main] [spring-boot-lab,,,].s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data Redis repositories in DEFAULT mode.
+2026-08-08T22:18:52.285Z  INFO 1 --- [           main] [spring-boot-lab,,,].RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.ravan.SpringBootLab.repository.CartItemRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-08-08T22:18:52.286Z  INFO 1 --- [           main] [spring-boot-lab,,,].RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.ravan.SpringBootLab.repository.DeadLetterAuditLogRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-08-08T22:18:52.286Z  INFO 1 --- [           main] [spring-boot-lab,,,].RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.ravan.SpringBootLab.repository.DeadLetterEventRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-08-08T22:18:52.286Z  INFO 1 --- [           main] [spring-boot-lab,,,].RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.ravan.SpringBootLab.repository.IdempotencyRecordRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-08-08T22:18:52.286Z  INFO 1 --- [           main] [spring-boot-lab,,,].RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.ravan.SpringBootLab.repository.OrderItemRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-08-08T22:18:52.286Z  INFO 1 --- [           main] [spring-boot-lab,,,].RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.ravan.SpringBootLab.repository.OrderRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-08-08T22:18:52.287Z  INFO 1 --- [           main] [spring-boot-lab,,,].RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.ravan.SpringBootLab.repository.OutboxEventRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-08-08T22:18:52.287Z  INFO 1 --- [           main] [spring-boot-lab,,,].RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.ravan.SpringBootLab.repository.PaymentRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-08-08T22:18:52.287Z  INFO 1 --- [           main] [spring-boot-lab,,,].RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.ravan.SpringBootLab.repository.ProductRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-08-08T22:18:52.287Z  INFO 1 --- [           main] [spring-boot-lab,,,].RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.ravan.SpringBootLab.repository.RefreshTokenRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-08-08T22:18:52.287Z  INFO 1 --- [           main] [spring-boot-lab,,,].RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.ravan.SpringBootLab.repository.UserRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-08-08T22:18:52.287Z  INFO 1 --- [           main] [spring-boot-lab,,,].s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 4 ms. Found 0 Redis repository interfaces.
+	default.api.timeout.ms = 60000
+	request.timeout.ms = 30000
+	sasl.login.connect.timeout.ms = null
+	sasl.login.read.timeout.ms = null
+	session.timeout.ms = 45000
+	socket.connection.setup.timeout.max.ms = 30000
+	socket.connection.setup.timeout.ms = 10000
+	default.api.timeout.ms = 60000
+	request.timeout.ms = 30000
+	sasl.login.connect.timeout.ms = null
+	sasl.login.read.timeout.ms = null
+	session.timeout.ms = 45000
+	socket.connection.setup.timeout.max.ms = 30000
+	socket.connection.setup.timeout.ms = 10000
+	default.api.timeout.ms = 60000
+	request.timeout.ms = 30000
+	sasl.login.connect.timeout.ms = null
+	sasl.login.read.timeout.ms = null
+	session.timeout.ms = 45000
+	socket.connection.setup.timeout.max.ms = 30000
+	socket.connection.setup.timeout.ms = 10000
+	default.api.timeout.ms = 60000
+	request.timeout.ms = 30000
+	sasl.login.connect.timeout.ms = null
+	sasl.login.read.timeout.ms = null
+	session.timeout.ms = 45000
+	socket.connection.setup.timeout.max.ms = 30000
+	socket.connection.setup.timeout.ms = 10000
+	default.api.timeout.ms = 60000
+	request.timeout.ms = 30000
+	sasl.login.connect.timeout.ms = null
+	sasl.login.read.timeout.ms = null
+	session.timeout.ms = 45000
+	socket.connection.setup.timeout.max.ms = 30000
+	socket.connection.setup.timeout.ms = 10000
+	default.api.timeout.ms = 60000
+	request.timeout.ms = 30000
+	sasl.login.connect.timeout.ms = null
+	sasl.login.read.timeout.ms = null
+	session.timeout.ms = 45000
+	socket.connection.setup.timeout.max.ms = 30000
+	socket.connection.setup.timeout.ms = 10000
+	default.api.timeout.ms = 60000
+	request.timeout.ms = 30000
+	sasl.login.connect.timeout.ms = null
+	sasl.login.read.timeout.ms = null
+	session.timeout.ms = 45000
+	socket.connection.setup.timeout.max.ms = 30000
+	socket.connection.setup.timeout.ms = 10000
+	default.api.timeout.ms = 60000
+	request.timeout.ms = 30000
+	sasl.login.connect.timeout.ms = null
+	sasl.login.read.timeout.ms = null
+	session.timeout.ms = 45000
+	socket.connection.setup.timeout.max.ms = 30000
+	socket.connection.setup.timeout.ms = 10000
+	default.api.timeout.ms = 60000
+	request.timeout.ms = 30000
+	sasl.login.connect.timeout.ms = null
+	sasl.login.read.timeout.ms = null
+	session.timeout.ms = 45000
+	socket.connection.setup.timeout.max.ms = 30000
+	socket.connection.setup.timeout.ms = 10000
+	default.api.timeout.ms = 60000
+	request.timeout.ms = 30000
+	sasl.login.connect.timeout.ms = null
+	sasl.login.read.timeout.ms = null
+	session.timeout.ms = 45000
+	socket.connection.setup.timeout.max.ms = 30000
+	socket.connection.setup.timeout.ms = 10000
+        dle1_0.exception_class,
+        dle1_0.exception_message,
+        dle1_0.exception_class,
+        dle1_0.exception_message,
+        dle1_0.exception_class,
+        dle1_0.exception_message,
+        dle1_0.exception_class,
+        dle1_0.exception_message,
+        dle1_0.exception_class,
+        dle1_0.exception_message,
+        dle1_0.exception_class,
+        dle1_0.exception_message,
+        dle1_0.exception_class,
+        dle1_0.exception_message,
+        dle1_0.exception_class,
+        dle1_0.exception_message,
+        dle1_0.exception_class,
+        dle1_0.exception_message,
+        dle1_0.exception_class,
+        dle1_0.exception_message,
+        dle1_0.exception_class,
+        dle1_0.exception_message,
+        dle1_0.exception_class,
+        dle1_0.exception_message,
+        dle1_0.exception_class,
+        dle1_0.exception_message,
+        dle1_0.exception_class,
+        dle1_0.exception_message,
+        dle1_0.exception_class,
+        dle1_0.exception_message,
+===== spring-boot-lab-54d6d8b686-f59lm =====
+2026-08-08T22:19:22.847Z  INFO 1 --- [           main] [spring-boot-lab,,,].s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data Redis repositories in DEFAULT mode.
+2026-08-08T22:19:22.853Z  INFO 1 --- [           main] [spring-boot-lab,,,].RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.ravan.SpringBootLab.repository.CartItemRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-08-08T22:19:22.854Z  INFO 1 --- [           main] [spring-boot-lab,,,].RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.ravan.SpringBootLab.repository.DeadLetterAuditLogRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-08-08T22:19:22.854Z  INFO 1 --- [           main] [spring-boot-lab,,,].RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.ravan.SpringBootLab.repository.DeadLetterEventRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-08-08T22:19:22.854Z  INFO 1 --- [           main] [spring-boot-lab,,,].RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.ravan.SpringBootLab.repository.IdempotencyRecordRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-08-08T22:19:22.854Z  INFO 1 --- [           main] [spring-boot-lab,,,].RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.ravan.SpringBootLab.repository.OrderItemRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-08-08T22:19:22.854Z  INFO 1 --- [           main] [spring-boot-lab,,,].RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.ravan.SpringBootLab.repository.OrderRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-08-08T22:19:22.854Z  INFO 1 --- [           main] [spring-boot-lab,,,].RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.ravan.SpringBootLab.repository.OutboxEventRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-08-08T22:19:22.855Z  INFO 1 --- [           main] [spring-boot-lab,,,].RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.ravan.SpringBootLab.repository.PaymentRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-08-08T22:19:22.855Z  INFO 1 --- [           main] [spring-boot-lab,,,].RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.ravan.SpringBootLab.repository.ProductRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-08-08T22:19:22.855Z  INFO 1 --- [           main] [spring-boot-lab,,,].RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.ravan.SpringBootLab.repository.RefreshTokenRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-08-08T22:19:22.855Z  INFO 1 --- [           main] [spring-boot-lab,,,].RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.ravan.SpringBootLab.repository.UserRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2026-08-08T22:19:22.855Z  INFO 1 --- [           main] [spring-boot-lab,,,].s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 3 ms. Found 0 Redis repository interfaces.
+	default.api.timeout.ms = 60000
+	request.timeout.ms = 30000
+	sasl.login.connect.timeout.ms = null
+	sasl.login.read.timeout.ms = null
+	session.timeout.ms = 45000
+	socket.connection.setup.timeout.max.ms = 30000
+	socket.connection.setup.timeout.ms = 10000
+	default.api.timeout.ms = 60000
+	request.timeout.ms = 30000
+	sasl.login.connect.timeout.ms = null
+	sasl.login.read.timeout.ms = null
+	session.timeout.ms = 45000
+	socket.connection.setup.timeout.max.ms = 30000
+	socket.connection.setup.timeout.ms = 10000
+	default.api.timeout.ms = 60000
+	request.timeout.ms = 30000
+	sasl.login.connect.timeout.ms = null
+	sasl.login.read.timeout.ms = null
+	session.timeout.ms = 45000
+	socket.connection.setup.timeout.max.ms = 30000
+	socket.connection.setup.timeout.ms = 10000
+	default.api.timeout.ms = 60000
+	request.timeout.ms = 30000
+	sasl.login.connect.timeout.ms = null
+	sasl.login.read.timeout.ms = null
+	session.timeout.ms = 45000
+	socket.connection.setup.timeout.max.ms = 30000
+	socket.connection.setup.timeout.ms = 10000
+	default.api.timeout.ms = 60000
+	request.timeout.ms = 30000
+	sasl.login.connect.timeout.ms = null
+	sasl.login.read.timeout.ms = null
+	session.timeout.ms = 45000
+	socket.connection.setup.timeout.max.ms = 30000
+	socket.connection.setup.timeout.ms = 10000
+	default.api.timeout.ms = 60000
+	request.timeout.ms = 30000
+	sasl.login.connect.timeout.ms = null
+	sasl.login.read.timeout.ms = null
+	session.timeout.ms = 45000
+	socket.connection.setup.timeout.max.ms = 30000
+	socket.connection.setup.timeout.ms = 10000
+	default.api.timeout.ms = 60000
+	request.timeout.ms = 30000
+	sasl.login.connect.timeout.ms = null
+	sasl.login.read.timeout.ms = null
+	session.timeout.ms = 45000
+	socket.connection.setup.timeout.max.ms = 30000
+	socket.connection.setup.timeout.ms = 10000
+	default.api.timeout.ms = 60000
+	request.timeout.ms = 30000
+	sasl.login.connect.timeout.ms = null
+	sasl.login.read.timeout.ms = null
+	session.timeout.ms = 45000
+	socket.connection.setup.timeout.max.ms = 30000
+	socket.connection.setup.timeout.ms = 10000
+	default.api.timeout.ms = 60000
+	request.timeout.ms = 30000
+	sasl.login.connect.timeout.ms = null
+	sasl.login.read.timeout.ms = null
+	session.timeout.ms = 45000
+	socket.connection.setup.timeout.max.ms = 30000
+	socket.connection.setup.timeout.ms = 10000
+	default.api.timeout.ms = 60000
+	request.timeout.ms = 30000
+	sasl.login.connect.timeout.ms = null
+	sasl.login.read.timeout.ms = null
+	session.timeout.ms = 45000
+	socket.connection.setup.timeout.max.ms = 30000
+	socket.connection.setup.timeout.ms = 10000
+        dle1_0.exception_class,
+        dle1_0.exception_message,
+        dle1_0.exception_class,
+        dle1_0.exception_message,
+        dle1_0.exception_class,
+        dle1_0.exception_message,
+        dle1_0.exception_class,
+        dle1_0.exception_message,
+        dle1_0.exception_class,
+        dle1_0.exception_message,
+        dle1_0.exception_class,
+        dle1_0.exception_message,
+        dle1_0.exception_class,
+        dle1_0.exception_message,
+        dle1_0.exception_class,
+        dle1_0.exception_message,
+        dle1_0.exception_class,
+        dle1_0.exception_message,
+        dle1_0.exception_class,
+        dle1_0.exception_message,
+        dle1_0.exception_class,
+        dle1_0.exception_message,
+        dle1_0.exception_class,
+        dle1_0.exception_message,
+        dle1_0.exception_class,
+        dle1_0.exception_message,
+        dle1_0.exception_class,
+        dle1_0.exception_message,

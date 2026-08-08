@@ -1,0 +1,312 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-headless
+  namespace: spring-boot-lab
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app: redis-ha
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: redis
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-sentinel
+  namespace: spring-boot-lab
+spec:
+  selector:
+    app: redis-sentinel
+  ports:
+    - name: sentinel
+      port: 26379
+      targetPort: sentinel
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-sentinel-headless
+  namespace: spring-boot-lab
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app: redis-sentinel
+  ports:
+    - name: sentinel
+      port: 26379
+      targetPort: sentinel
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-ha-config
+  namespace: spring-boot-lab
+data:
+  redis.conf: |
+    port 6379
+    bind 0.0.0.0
+    protected-mode no
+
+    appendonly yes
+    appendfsync everysec
+
+    save 900 1
+    save 300 10
+    save 60 10000
+
+    repl-diskless-sync yes
+    repl-diskless-sync-delay 1
+
+    repl-backlog-size 16mb
+    repl-backlog-ttl 3600
+
+    min-replicas-to-write 1
+    min-replicas-max-lag 10
+
+    tcp-keepalive 60
+
+  sentinel.conf: |
+    port 26379
+    bind 0.0.0.0
+    protected-mode no
+
+    sentinel resolve-hostnames yes
+    sentinel announce-hostnames yes
+    sentinel monitor mymaster redis-0.redis-headless.spring-boot-lab.svc.cluster.local 6379 2
+    sentinel down-after-milliseconds mymaster 5000
+    sentinel failover-timeout mymaster 30000
+    sentinel parallel-syncs mymaster 1
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+  namespace: spring-boot-lab
+spec:
+  serviceName: redis-headless
+  replicas: 3
+  podManagementPolicy: Parallel
+
+  selector:
+    matchLabels:
+      app: redis-ha
+
+  template:
+    metadata:
+      labels:
+        app: redis-ha
+
+    spec:
+      terminationGracePeriodSeconds: 30
+
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: redis-ha
+              topologyKey: kubernetes.io/hostname
+
+      initContainers:
+        - name: redis-config
+          image: redis:7
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              cp /config-template/redis.conf /config/redis.conf
+
+              ORDINAL="${HOSTNAME##*-}"
+
+              if [ "$ORDINAL" != "0" ]; then
+                echo \
+                  "replicaof redis-0.redis-headless.spring-boot-lab.svc.cluster.local 6379" \
+                  >> /config/redis.conf
+              fi
+
+              cat /config/redis.conf
+
+          volumeMounts:
+            - name: config-template
+              mountPath: /config-template
+
+            - name: config
+              mountPath: /config
+
+      containers:
+        - name: redis
+          image: redis:7
+
+          command:
+            - redis-server
+            - /config/redis.conf
+
+          ports:
+            - name: redis
+              containerPort: 6379
+
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -ec
+                - redis-cli ping | grep PONG
+            initialDelaySeconds: 3
+            periodSeconds: 3
+            timeoutSeconds: 2
+            failureThreshold: 5
+
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -ec
+                - redis-cli ping | grep PONG
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 5
+
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+
+          volumeMounts:
+            - name: config
+              mountPath: /config
+
+            - name: data
+              mountPath: /data
+
+      volumes:
+        - name: config-template
+          configMap:
+            name: redis-ha-config
+
+        - name: config
+          emptyDir: {}
+
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis-sentinel
+  namespace: spring-boot-lab
+spec:
+  serviceName: redis-sentinel-headless
+  replicas: 3
+  podManagementPolicy: Parallel
+
+  selector:
+    matchLabels:
+      app: redis-sentinel
+
+  template:
+    metadata:
+      labels:
+        app: redis-sentinel
+
+    spec:
+      terminationGracePeriodSeconds: 15
+
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: redis-sentinel
+              topologyKey: kubernetes.io/hostname
+
+      initContainers:
+        - name: sentinel-config
+          image: redis:7
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              cp /config-template/sentinel.conf /config/sentinel.conf
+              chmod 666 /config/sentinel.conf
+
+          volumeMounts:
+            - name: config-template
+              mountPath: /config-template
+
+            - name: config
+              mountPath: /config
+
+      containers:
+        - name: sentinel
+          image: redis:7
+
+          command:
+            - redis-sentinel
+            - /config/sentinel.conf
+
+          ports:
+            - name: sentinel
+              containerPort: 26379
+
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -ec
+                - redis-cli -p 26379 ping | grep PONG
+            initialDelaySeconds: 3
+            periodSeconds: 3
+            timeoutSeconds: 2
+            failureThreshold: 5
+
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -ec
+                - redis-cli -p 26379 ping | grep PONG
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 5
+
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+
+          volumeMounts:
+            - name: config
+              mountPath: /config
+
+      volumes:
+        - name: config-template
+          configMap:
+            name: redis-ha-config
+
+        - name: config
+          emptyDir: {}
