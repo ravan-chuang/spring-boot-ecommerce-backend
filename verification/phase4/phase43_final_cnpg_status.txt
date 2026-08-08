@@ -1,0 +1,27 @@
+Cluster Summary
+Name                     spring-boot-lab/postgres-ha
+System ID:               7671663473931874327
+PostgreSQL Image:        ghcr.io/cloudnative-pg/postgresql:17
+Primary instance:        postgres-ha-2
+Primary promotion time:  2026-08-08 15:43:41 +0000 UTC (48s)
+Status:                  Cluster in healthy state
+Instances:               3
+Ready instances:         3
+Size:                    465M
+Current Write LSN:       0/17058FF0 (Timeline: 4 - WAL File: 000000040000000000000017)
+
+Continuous Backup not configured
+
+Streaming Replication status
+Replication Slots Enabled
+Name           Sent LSN    Write LSN   Flush LSN   Replay LSN  Write Lag  Flush Lag  Replay Lag  State      Sync State  Sync Priority  Replication Slot
+----           --------    ---------   ---------   ----------  ---------  ---------  ----------  -----      ----------  -------------  ----------------
+postgres-ha-1  0/17058FF0  0/17058FF0  0/17058FF0  0/17058FF0  00:00:00   00:00:00   00:00:00    streaming  quorum      1              active
+postgres-ha-3  0/17058FF0  0/17058FF0  0/17058FF0  0/17058FF0  00:00:00   00:00:00   00:00:00    streaming  quorum      1              active
+
+Instances status
+Name           Current LSN  Replication role  Status  QoS        Manager Version  Node
+----           -----------  ----------------  ------  ---        ---------------  ----
+postgres-ha-2  0/17058FF0   Primary           OK      Burstable  1.29.2           spring-boot-ha-worker2
+postgres-ha-1  0/17058FF0   Standby (sync)    OK      Burstable  1.29.2           spring-boot-ha-worker
+postgres-ha-3  0/17058FF0   Standby (sync)    OK      Burstable  1.29.2           spring-boot-ha-worker3

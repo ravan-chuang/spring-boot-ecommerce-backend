@@ -1,0 +1,202 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"postgresql.cnpg.io/v1","kind":"Cluster","metadata":{"annotations":{},"name":"postgres-ha-restore","namespace":"spring-boot-lab"},"spec":{"bootstrap":{"recovery":{"source":"postgres-ha-backup-source"}},"externalClusters":[{"name":"postgres-ha-backup-source","plugin":{"name":"barman-cloud.cloudnative-pg.io","parameters":{"barmanObjectName":"postgres-ha-backup","serverName":"postgres-ha"}}}],"imageName":"ghcr.io/cloudnative-pg/postgresql:17","instances":1,"resources":{"limits":{"cpu":"500m","memory":"768Mi"},"requests":{"cpu":"100m","memory":"256Mi"}},"storage":{"size":"2Gi"}}}
+  creationTimestamp: "2026-08-08T16:29:50Z"
+  generation: 1
+  name: postgres-ha-restore
+  namespace: spring-boot-lab
+  resourceVersion: "41882"
+  uid: d6ac06a9-08d7-47d1-adb1-b3f74f628a49
+spec:
+  affinity:
+    podAntiAffinityType: preferred
+  bootstrap:
+    recovery:
+      database: app
+      owner: app
+      source: postgres-ha-backup-source
+  enablePDB: true
+  enableSuperuserAccess: false
+  externalClusters:
+  - name: postgres-ha-backup-source
+    plugin:
+      enabled: true
+      isWALArchiver: false
+      name: barman-cloud.cloudnative-pg.io
+      parameters:
+        barmanObjectName: postgres-ha-backup
+        serverName: postgres-ha
+  failoverDelay: 0
+  imageName: ghcr.io/cloudnative-pg/postgresql:17
+  instances: 1
+  logLevel: info
+  maxSyncReplicas: 0
+  minSyncReplicas: 0
+  monitoring:
+    customQueriesConfigMap:
+    - key: queries
+      name: cnpg-default-monitoring
+    disableDefaultQueries: false
+    enablePodMonitor: false
+  postgresGID: 26
+  postgresUID: 26
+  postgresql:
+    parameters:
+      archive_mode: "on"
+      archive_timeout: 5min
+      dynamic_shared_memory_type: posix
+      full_page_writes: "on"
+      log_destination: csvlog
+      log_directory: /controller/log
+      log_filename: postgres
+      log_rotation_age: "0"
+      log_rotation_size: "0"
+      log_truncate_on_rotation: "false"
+      logging_collector: "on"
+      max_parallel_workers: "32"
+      max_replication_slots: "32"
+      max_worker_processes: "32"
+      shared_memory_type: mmap
+      shared_preload_libraries: ""
+      ssl_max_protocol_version: TLSv1.3
+      ssl_min_protocol_version: TLSv1.3
+      wal_keep_size: 512MB
+      wal_level: logical
+      wal_log_hints: "on"
+      wal_receiver_timeout: 5s
+      wal_sender_timeout: 5s
+    syncReplicaElectionConstraint:
+      enabled: false
+  primaryUpdateMethod: restart
+  primaryUpdateStrategy: unsupervised
+  probes:
+    liveness:
+      isolationCheck:
+        connectionTimeout: 1000
+        enabled: true
+        requestTimeout: 1000
+  replicationSlots:
+    highAvailability:
+      enabled: true
+      slotPrefix: _cnpg_
+    synchronizeReplicas:
+      enabled: true
+    updateInterval: 30
+  resources:
+    limits:
+      cpu: 500m
+      memory: 768Mi
+    requests:
+      cpu: 100m
+      memory: 256Mi
+  smartShutdownTimeout: 180
+  startDelay: 3600
+  stopDelay: 1800
+  storage:
+    resizeInUseVolumes: true
+    size: 2Gi
+  switchoverDelay: 3600
+status:
+  availableArchitectures:
+  - goArch: amd64
+    hash: 495c8f8b99d3a01b461bcffa8f9ef3cba7eb381e2b19f7af48b81c42270f0759
+  - goArch: arm64
+    hash: 101495327b17038a7f67e48a66f8be7bbcad798b1601a41fde435c22beeebd91
+  certificates:
+    clientCASecret: postgres-ha-restore-ca
+    expirations:
+      postgres-ha-restore-ca: 2026-11-06 16:24:50 +0000 UTC
+      postgres-ha-restore-replication: 2026-11-06 16:24:50 +0000 UTC
+      postgres-ha-restore-server: 2026-11-06 16:24:50 +0000 UTC
+    replicationTLSSecret: postgres-ha-restore-replication
+    serverAltDNSNames:
+    - postgres-ha-restore-rw
+    - postgres-ha-restore-rw.spring-boot-lab
+    - postgres-ha-restore-rw.spring-boot-lab.svc
+    - postgres-ha-restore-rw.spring-boot-lab.svc.cluster.local
+    - postgres-ha-restore-r
+    - postgres-ha-restore-r.spring-boot-lab
+    - postgres-ha-restore-r.spring-boot-lab.svc
+    - postgres-ha-restore-r.spring-boot-lab.svc.cluster.local
+    - postgres-ha-restore-ro
+    - postgres-ha-restore-ro.spring-boot-lab
+    - postgres-ha-restore-ro.spring-boot-lab.svc
+    - postgres-ha-restore-ro.spring-boot-lab.svc.cluster.local
+    serverCASecret: postgres-ha-restore-ca
+    serverTLSSecret: postgres-ha-restore-server
+  cloudNativePGCommitHash: 94ee31178
+  cloudNativePGOperatorHash: 101495327b17038a7f67e48a66f8be7bbcad798b1601a41fde435c22beeebd91
+  conditions:
+  - lastTransitionTime: "2026-08-08T16:30:28Z"
+    message: A single, unique system ID was found across reporting instances.
+    reason: Unique
+    status: "True"
+    type: ConsistentSystemID
+  - lastTransitionTime: "2026-08-08T16:30:35Z"
+    message: Cluster is Ready
+    reason: ClusterIsReady
+    status: "True"
+    type: Ready
+  - lastTransitionTime: "2026-08-08T16:30:27Z"
+    message: Continuous archiving is working
+    reason: ContinuousArchivingSuccess
+    status: "True"
+    type: ContinuousArchiving
+  configMapResourceVersion:
+    metrics:
+      cnpg-default-monitoring: "19767"
+  currentPrimary: postgres-ha-restore-1
+  currentPrimaryTimestamp: "2026-08-08T16:30:26.863374Z"
+  healthyPVC:
+  - postgres-ha-restore-1
+  image: ghcr.io/cloudnative-pg/postgresql:17
+  instanceNames:
+  - postgres-ha-restore-1
+  instances: 1
+  instancesReportedState:
+    postgres-ha-restore-1:
+      ip: 10.244.3.13
+      isPrimary: true
+      timeLineID: 6
+  instancesStatus:
+    healthy:
+    - postgres-ha-restore-1
+  latestGeneratedNode: 1
+  managedRolesStatus: {}
+  pgDataImageInfo:
+    image: ghcr.io/cloudnative-pg/postgresql:17
+    majorVersion: 17
+  phase: Cluster in healthy state
+  pluginStatus:
+  - capabilities:
+    - TYPE_RECONCILER_HOOKS
+    - TYPE_LIFECYCLE_SERVICE
+    - TYPE_INSTANCE_SIDECAR_INJECTION
+    name: barman-cloud.cloudnative-pg.io
+    version: 0.13.0
+  poolerIntegrations:
+    pgBouncerIntegration: {}
+  pvcCount: 1
+  readService: postgres-ha-restore-r
+  readyInstances: 1
+  secretsResourceVersion:
+    applicationSecretVersion: "41621"
+    clientCaSecretVersion: "41618"
+    replicationSecretVersion: "41620"
+    serverCaSecretVersion: "41618"
+    serverSecretVersion: "41619"
+  selector: cnpg.io/cluster=postgres-ha-restore,cnpg.io/podRole=instance
+  switchReplicaClusterStatus: {}
+  systemID: "7671663473931874327"
+  targetPrimary: postgres-ha-restore-1
+  targetPrimaryTimestamp: "2026-08-08T16:29:50.957484Z"
+  timelineID: 6
+  topology:
+    instances:
+      postgres-ha-restore-1: {}
+    nodesUsed: 1
+    successfullyExtracted: true
+  writeService: postgres-ha-restore-rw

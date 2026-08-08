@@ -1,0 +1,35 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: postgres-ha
+  namespace: spring-boot-lab
+
+spec:
+  instances: 3
+
+  imageName: ghcr.io/cloudnative-pg/postgresql:17
+
+  primaryUpdateStrategy: unsupervised
+
+  bootstrap:
+    initdb:
+      database: spring_boot_lab
+      owner: ravan
+      secret:
+        name: postgres-ha-app
+
+  storage:
+    size: 2Gi
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 768Mi
+
+  affinity:
+    enablePodAntiAffinity: true
+    topologyKey: kubernetes.io/hostname
+    podAntiAffinityType: preferred

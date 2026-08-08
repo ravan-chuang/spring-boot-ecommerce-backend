@@ -1,0 +1,11 @@
+=== Phase 4.3-C RPO Reconciliation ===
+Client acknowledged : 72
+Client failed       : 17
+DB rows             : 72
+Last acknowledged seq: 89
+Highest DB seq       : 89
+
+Acknowledged but missing from DB: []
+Present in DB without COMMITTED acknowledgement: []
+
+RESULT: OBSERVED RPO = 0 ACKNOWLEDGED TRANSACTIONS LOST

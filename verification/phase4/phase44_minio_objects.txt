@@ -1,0 +1,4 @@
+local/postgres-backups/postgres-ha/wals/0000000400000000/000000040000000000000019.gz
+local/postgres-backups/postgres-ha/wals/0000000400000000/00000004000000000000001A.partial.gz
+local/postgres-backups/postgres-ha/wals/00000005.history.gz
+local/postgres-backups/postgres-ha/wals/0000000500000000/00000005000000000000001A.gz

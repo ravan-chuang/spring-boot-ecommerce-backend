@@ -70,3 +70,6 @@ verification/reliability_drills_*/
 
 # Kubernetes local secrets
 k8s/base/*-secret.yaml
+
+# CloudNativePG local secrets
+k8s/postgres-ha/*-secret.yaml

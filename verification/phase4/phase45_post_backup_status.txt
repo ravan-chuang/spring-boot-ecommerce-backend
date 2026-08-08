@@ -1,0 +1,40 @@
+Cluster Summary
+Name                     spring-boot-lab/postgres-ha
+System ID:               7671663473931874327
+PostgreSQL Image:        ghcr.io/cloudnative-pg/postgresql:17
+Primary instance:        postgres-ha-1
+Primary promotion time:  2026-08-08 16:15:43 +0000 UTC (7m15s)
+Status:                  Cluster in healthy state
+Instances:               3
+Ready instances:         3
+Size:                    561M
+Current Write LSN:       0/1B000168 (Timeline: 5 - WAL File: 00000005000000000000001B)
+
+Continuous Backup status (Barman Cloud Plugin)
+ObjectStore / Server name:      postgres-ha-backup/postgres-ha
+First Point of Recoverability:  2026-08-09 00:22:44 CST
+Last Successful Backup:         2026-08-09 00:22:44 CST
+Last Failed Backup:             -
+Working WAL archiving:          OK
+WALs waiting to be archived:    0
+Last Archived WAL:              00000005000000000000001A   @   2026-08-08T16:19:08.49354Z
+Last Failed WAL:                00000005.history           @   2026-08-08T16:15:42.787249Z
+
+Streaming Replication status
+Replication Slots Enabled
+Name           Sent LSN    Write LSN   Flush LSN   Replay LSN  Write Lag  Flush Lag  Replay Lag  State      Sync State  Sync Priority  Replication Slot
+----           --------    ---------   ---------   ----------  ---------  ---------  ----------  -----      ----------  -------------  ----------------
+postgres-ha-2  0/1B000168  0/1B000168  0/1B000168  0/1B000168  00:00:00   00:00:00   00:00:00    streaming  quorum      1              active
+postgres-ha-3  0/1B000168  0/1B000168  0/1B000168  0/1B000168  00:00:00   00:00:00   00:00:00    streaming  quorum      1              active
+
+Instances status
+Name           Current LSN  Replication role  Status  QoS        Manager Version  Node
+----           -----------  ----------------  ------  ---        ---------------  ----
+postgres-ha-1  0/1B000168   Primary           OK      Burstable  1.29.2           spring-boot-ha-worker
+postgres-ha-2  0/1B000168   Standby (sync)    OK      Burstable  1.29.2           spring-boot-ha-worker2
+postgres-ha-3  0/1B000168   Standby (sync)    OK      Burstable  1.29.2           spring-boot-ha-worker3
+
+Plugins status
+Name                            Version  Status  Reported Operator Capabilities
+----                            -------  ------  ------------------------------
+barman-cloud.cloudnative-pg.io  0.13.0   N/A     Reconciler Hooks, Lifecycle Service, TYPE_INSTANCE_SIDECAR_INJECTION

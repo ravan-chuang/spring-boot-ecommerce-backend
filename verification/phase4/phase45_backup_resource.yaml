@@ -1,0 +1,43 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Backup
+metadata:
+  creationTimestamp: "2026-08-08T16:22:42Z"
+  generation: 1
+  labels:
+    cnpg.io/cluster: postgres-ha
+  name: postgres-ha-plugin-20260809002242
+  namespace: spring-boot-lab
+  resourceVersion: "40156"
+  uid: 84e54181-fc6a-40fc-bf05-07b4847e6c19
+spec:
+  cluster:
+    name: postgres-ha
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io
+status:
+  backupId: 20260808T162243
+  backupName: backup-20260808162243
+  beginLSN: 0/1B000060
+  beginWal: 00000005000000000000001B
+  endLSN: 0/1B000168
+  endWal: 00000005000000000000001B
+  instanceID:
+    ContainerID: containerd://5adcd9329361d5c08eafbc7fdc42d101e5a0640d809d5aacf805d31187272f1d
+    podName: postgres-ha-2
+    sessionID: 48a8d63c-2089-4630-9b7b-49f1acaf913c
+  majorVersion: 17
+  method: plugin
+  online: true
+  phase: completed
+  pluginMetadata:
+    clusterUID: 85b274ff-03fa-42c2-8444-ab36fe462cc5
+    displayName: BarmanCloudInstance
+    name: barman-cloud.cloudnative-pg.io
+    pluginName: barman-cloud.cloudnative-pg.io
+    timeline: "5"
+    version: 0.13.0
+  reconciliationStartedAt: "2026-08-08T16:22:42Z"
+  reconciliationTerminatedAt: "2026-08-08T16:22:46Z"
+  startedAt: "2026-08-08T16:22:43Z"
+  stoppedAt: "2026-08-08T16:22:44Z"

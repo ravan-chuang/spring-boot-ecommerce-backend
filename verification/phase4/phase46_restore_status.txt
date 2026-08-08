@@ -1,0 +1,26 @@
+Cluster Summary
+Name                     spring-boot-lab/postgres-ha-restore
+System ID:               7671663473931874327
+PostgreSQL Image:        ghcr.io/cloudnative-pg/postgresql:17
+Primary instance:        postgres-ha-restore-1
+Primary promotion time:  2026-08-08 16:30:27 +0000 UTC (1m24s)
+Status:                  Cluster in healthy state
+Instances:               1
+Ready instances:         1
+Size:                    104M
+Current Write LSN:       0/1E001770 (Timeline: 6 - WAL File: 00000006000000000000001E)
+
+Continuous Backup not configured
+
+Streaming Replication status
+Not configured
+
+Instances status
+Name                   Current LSN  Replication role  Status  QoS        Manager Version  Node
+----                   -----------  ----------------  ------  ---        ---------------  ----
+postgres-ha-restore-1  0/1E001770   Primary           OK      Burstable  1.29.2           spring-boot-ha-worker3
+
+Plugins status
+Name                            Version  Status  Reported Operator Capabilities
+----                            -------  ------  ------------------------------
+barman-cloud.cloudnative-pg.io  0.13.0   N/A     Reconciler Hooks, Lifecycle Service, TYPE_INSTANCE_SIDECAR_INJECTION

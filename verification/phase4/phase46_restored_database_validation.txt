@@ -1,0 +1,9 @@
+ current_database | pg_is_in_recovery
+------------------+-------------------
+ spring_boot_lab  | f
+(1 row)
+
+ phase4_probe_rows
+-------------------
+              3864
+(1 row)

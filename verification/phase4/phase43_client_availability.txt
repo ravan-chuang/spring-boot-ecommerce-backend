@@ -1,0 +1,12 @@
+=== Phase 4.3-C Client Availability ===
+Failure injection: 2026-08-08T15:42:53+00:00
+Parsed records: 89
+Post-failure attempts: 63
+Post-failure failures: 17
+Post-failure commits: 46
+
+First failure: 2026-08-08T15:42:53.925000+00:00 seq= 30
+Last failure: 2026-08-08T15:43:44.187000+00:00 seq= 46
+First recovered commit: 2026-08-08T15:43:45.468000+00:00 seq= 47
+Client-visible RTO: 51.543 seconds
+Failure-injection-to-recovery: 52.468 seconds
