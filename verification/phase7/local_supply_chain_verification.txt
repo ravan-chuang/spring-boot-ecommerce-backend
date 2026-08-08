@@ -1,0 +1,16 @@
+=== Phase 7 Supply Chain Verification ===
+Workflow: /Users/ravan/Desktop/spring_boot_lab/.github/workflows/supply-chain.yml
+Digest deployment helper: /Users/ravan/Desktop/spring_boot_lab/scripts/deploy_image_digest.sh
+
+PASS: CycloneDX application SBOM configured
+PASS: filesystem vulnerability scanning configured
+PASS: container vulnerability scanning configured
+PASS: immutable container build configured
+PASS: Cosign keyless signing configured
+PASS: GitHub OIDC permission configured
+PASS: build provenance attestation configured
+PASS: image SBOM configured
+PASS: digest-based deployment helper configured
+PASS: no obvious embedded credential detected
+
+RESULT: Phase 7 supply-chain repository controls are structurally valid.
