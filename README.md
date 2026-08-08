@@ -8,9 +8,9 @@ The current milestone has moved materially beyond an application-only HA demo. I
 
 The boundary remains explicit: these results demonstrate **local failure-recovery mechanics under the tested scenarios**, not cloud multi-zone production availability. The kind control plane remains single-node; persistent storage and object storage are local; Redis replication is asynchronous; external secrets/workload identity and verified cloud/IaC delivery are not yet established; historical production SLO/RPO/RTO attainment is not claimed.
 
-**Current verified release:** `v1.9.0-phase7-supply-chain`  
-**Current main commit:** `6230e8c`  
-**Latest merged milestone:** PR #33 - software supply-chain security controls  
+**Current verified release:** `v1.9.0-phase7-supply-chain`
+**Current main commit:** `6230e8c`
+**Latest merged milestone:** PR #33 - software supply-chain security controls
 **Verification date:** 2026-08-09
 
 ---
