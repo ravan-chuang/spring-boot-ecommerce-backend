@@ -1,0 +1,20 @@
+=== Phase 5 Kafka Message Reconciliation ===
+
+Producer evidence file    : verification/phase5/producer_after_recovery.log
+Producer ACKed records    : 3733
+Unique ACKed values       : 3733
+ACK duplicate records     : 0
+Terminal send errors      : 0
+Captured ACK value range  : 0..3732
+
+Consumed records          : 6337
+Unique consumed values    : 6337
+Consumed duplicates       : 0
+
+ACKed but missing count   : 0
+Additional Kafka records  : 2604
+
+ACKed but missing from Kafka: []
+Kafka values outside captured ACK window: [3733, 3734, 3735, 3736, 3737, 3738, 3739, 3740, 3741, 3742, 3743, 3744, 3745, 3746, 3747, 3748, 3749, 3750, 3751, 3752] ...
+
+RESULT: OBSERVED RPO = 0 ACKNOWLEDGED MESSAGES LOST

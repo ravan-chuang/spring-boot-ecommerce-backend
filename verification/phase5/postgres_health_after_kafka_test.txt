@@ -1,0 +1,2 @@
+NAME          AGE     INSTANCES   READY   STATUS                     PRIMARY
+postgres-ha   7h37m   3           3       Cluster in healthy state   postgres-ha-1

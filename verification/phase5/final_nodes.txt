@@ -1,0 +1,5 @@
+NAME                           STATUS   ROLES           AGE   VERSION   INTERNAL-IP   EXTERNAL-IP   OS-IMAGE                       KERNEL-VERSION             CONTAINER-RUNTIME
+spring-boot-ha-control-plane   Ready    control-plane   27h   v1.36.1   172.20.0.4    <none>        Debian GNU/Linux 13 (trixie)   6.12.76-linuxkit (arm64)   containerd://2.3.1
+spring-boot-ha-worker          Ready    <none>          27h   v1.36.1   172.20.0.2    <none>        Debian GNU/Linux 13 (trixie)   6.12.76-linuxkit (arm64)   containerd://2.3.1
+spring-boot-ha-worker2         Ready    <none>          27h   v1.36.1   172.20.0.6    <none>        Debian GNU/Linux 13 (trixie)   6.12.76-linuxkit (arm64)   containerd://2.3.1
+spring-boot-ha-worker3         Ready    <none>          27h   v1.36.1   172.20.0.7    <none>        Debian GNU/Linux 13 (trixie)   6.12.76-linuxkit (arm64)   containerd://2.3.1

@@ -1,0 +1,8 @@
+ClusterId:              MkU3OEVBNTcwNTJENDM2Qk
+LeaderId:               2
+LeaderEpoch:            1
+HighWatermark:          1972
+MaxFollowerLag:         0
+MaxFollowerLagTimeMs:   130
+CurrentVoters:          [{"id": 1, "endpoints": ["CONTROLLER://kafka-0.kafka-headless.spring-boot-lab.svc.cluster.local:9093"]}, {"id": 2, "endpoints": ["CONTROLLER://kafka-1.kafka-headless.spring-boot-lab.svc.cluster.local:9093"]}, {"id": 3, "endpoints": ["CONTROLLER://kafka-2.kafka-headless.spring-boot-lab.svc.cluster.local:9093"]}]
+CurrentObservers:       []
