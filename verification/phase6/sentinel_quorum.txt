@@ -1,0 +1,1 @@
+OK 3 usable Sentinels. Quorum and failover authorization can be reached

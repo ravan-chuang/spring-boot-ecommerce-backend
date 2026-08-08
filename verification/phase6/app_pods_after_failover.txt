@@ -1,0 +1,4 @@
+NAME                               READY   STATUS    RESTARTS   AGE     IP            NODE                     NOMINATED NODE   READINESS GATES
+spring-boot-lab-54d6d8b686-6dbx2   1/1     Running   0          2m58s   10.244.1.12   spring-boot-ha-worker2   <none>           <none>
+spring-boot-lab-54d6d8b686-8mt8j   1/1     Running   0          7m43s   10.244.2.14   spring-boot-ha-worker    <none>           <none>
+spring-boot-lab-54d6d8b686-f59lm   1/1     Running   0          7m12s   10.244.1.11   spring-boot-ha-worker2   <none>           <none>

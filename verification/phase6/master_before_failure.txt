@@ -1,0 +1,1 @@
+CURRENT_MASTER=redis-0.redis-headless.spring-boot-lab.svc.cluster.local

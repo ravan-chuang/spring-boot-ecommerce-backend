@@ -1,0 +1,35 @@
+===== APPLICATION =====
+NAME                               READY   STATUS    RESTARTS   AGE     IP            NODE                     NOMINATED NODE   READINESS GATES
+spring-boot-lab-54d6d8b686-6dbx2   1/1     Running   0          6m48s   10.244.1.12   spring-boot-ha-worker2   <none>           <none>
+spring-boot-lab-54d6d8b686-8mt8j   1/1     Running   0          11m     10.244.2.14   spring-boot-ha-worker    <none>           <none>
+spring-boot-lab-54d6d8b686-f59lm   1/1     Running   0          11m     10.244.1.11   spring-boot-ha-worker2   <none>           <none>
+
+===== REDIS =====
+NAME      READY   STATUS    RESTARTS        AGE   IP            NODE                     NOMINATED NODE   READINESS GATES
+redis-0   1/1     Running   1 (5m26s ago)   25m   10.244.3.5    spring-boot-ha-worker3   <none>           <none>
+redis-1   1/1     Running   0               25m   10.244.1.9    spring-boot-ha-worker2   <none>           <none>
+redis-2   1/1     Running   0               25m   10.244.2.12   spring-boot-ha-worker    <none>           <none>
+
+===== SENTINEL =====
+NAME               READY   STATUS    RESTARTS        AGE   IP            NODE                     NOMINATED NODE   READINESS GATES
+redis-sentinel-0   1/1     Running   1 (5m26s ago)   16m   10.244.3.2    spring-boot-ha-worker3   <none>           <none>
+redis-sentinel-1   1/1     Running   0               16m   10.244.2.13   spring-boot-ha-worker    <none>           <none>
+redis-sentinel-2   1/1     Running   0               16m   10.244.1.10   spring-boot-ha-worker2   <none>           <none>
+
+===== REDIS ROLES =====
+--- redis-0 ---
+role:slave
+master_host:10.244.1.9
+master_link_status:up
+connected_slaves:0
+--- redis-1 ---
+role:master
+connected_slaves:2
+--- redis-2 ---
+role:slave
+master_host:10.244.1.9
+master_link_status:up
+connected_slaves:0
+
+===== SENTINEL QUORUM =====
+OK 3 usable Sentinels. Quorum and failover authorization can be reached

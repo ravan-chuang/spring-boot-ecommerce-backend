@@ -1,0 +1,26 @@
+===== REDIS =====
+NAME      READY   STATUS    RESTARTS   AGE     IP            NODE                     NOMINATED NODE   READINESS GATES
+redis-0   1/1     Running   0          9m36s   10.244.3.10   spring-boot-ha-worker3   <none>           <none>
+redis-1   1/1     Running   0          9m36s   10.244.1.9    spring-boot-ha-worker2   <none>           <none>
+redis-2   1/1     Running   0          9m36s   10.244.2.12   spring-boot-ha-worker    <none>           <none>
+
+===== SENTINEL =====
+NAME               READY   STATUS    RESTARTS   AGE   IP            NODE                     NOMINATED NODE   READINESS GATES
+redis-sentinel-0   1/1     Running   0          43s   10.244.3.11   spring-boot-ha-worker3   <none>           <none>
+redis-sentinel-1   1/1     Running   0          43s   10.244.2.13   spring-boot-ha-worker    <none>           <none>
+redis-sentinel-2   1/1     Running   0          43s   10.244.1.10   spring-boot-ha-worker2   <none>           <none>
+
+===== REPLICATION =====
+--- redis-0 ---
+role:master
+connected_slaves:2
+--- redis-1 ---
+role:slave
+master_host:redis-0.redis-headless.spring-boot-lab.svc.cluster.local
+master_link_status:up
+connected_slaves:0
+--- redis-2 ---
+role:slave
+master_host:redis-0.redis-headless.spring-boot-lab.svc.cluster.local
+master_link_status:up
+connected_slaves:0

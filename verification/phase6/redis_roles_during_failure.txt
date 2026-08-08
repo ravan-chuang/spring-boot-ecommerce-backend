@@ -1,0 +1,8 @@
+===== redis-1 =====
+role:master
+connected_slaves:1
+===== redis-2 =====
+role:slave
+master_host:10.244.1.9
+master_link_status:up
+connected_slaves:0

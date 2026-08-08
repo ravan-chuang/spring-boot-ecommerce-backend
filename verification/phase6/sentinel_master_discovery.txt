@@ -1,0 +1,12 @@
+
+===== redis-sentinel-0 =====
+redis-0.redis-headless.spring-boot-lab.svc.cluster.local
+6379
+
+===== redis-sentinel-1 =====
+redis-0.redis-headless.spring-boot-lab.svc.cluster.local
+6379
+
+===== redis-sentinel-2 =====
+redis-0.redis-headless.spring-boot-lab.svc.cluster.local
+6379
