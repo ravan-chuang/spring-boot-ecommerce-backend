@@ -1,0 +1,49 @@
+Name:         postgres-ha-plugin-20260809002242
+Namespace:    spring-boot-lab
+Labels:       cnpg.io/cluster=postgres-ha
+Annotations:  <none>
+API Version:  postgresql.cnpg.io/v1
+Kind:         Backup
+Metadata:
+  Creation Timestamp:  2026-08-08T16:22:42Z
+  Generation:          1
+  Resource Version:    40156
+  UID:                 84e54181-fc6a-40fc-bf05-07b4847e6c19
+Spec:
+  Cluster:
+    Name:  postgres-ha
+  Method:  plugin
+  Plugin Configuration:
+    Name:  barman-cloud.cloudnative-pg.io
+Status:
+  Backup Id:    20260808T162243
+  Backup Name:  backup-20260808162243
+  Begin LSN:    0/1B000060
+  Begin Wal:    00000005000000000000001B
+  End LSN:      0/1B000168
+  End Wal:      00000005000000000000001B
+  Instance ID:
+    Container ID:  containerd://5adcd9329361d5c08eafbc7fdc42d101e5a0640d809d5aacf805d31187272f1d
+    Pod Name:      postgres-ha-2
+    Session ID:    48a8d63c-2089-4630-9b7b-49f1acaf913c
+  Major Version:   17
+  Method:          plugin
+  Online:          true
+  Phase:           completed
+  Plugin Metadata:
+    Cluster UID:                 85b274ff-03fa-42c2-8444-ab36fe462cc5
+    Display Name:                BarmanCloudInstance
+    Name:                        barman-cloud.cloudnative-pg.io
+    Plugin Name:                 barman-cloud.cloudnative-pg.io
+    Timeline:                    5
+    Version:                     0.13.0
+  Reconciliation Started At:     2026-08-08T16:22:42Z
+  Reconciliation Terminated At:  2026-08-08T16:22:46Z
+  Started At:                    2026-08-08T16:22:43Z
+  Stopped At:                    2026-08-08T16:22:44Z
+Events:
+  Type    Reason     Age   From                   Message
+  ----    ------     ----  ----                   -------
+  Normal  Starting   15s   cloudnative-pg-backup  Starting backup for cluster postgres-ha
+  Normal  Starting   14s   local-webserver        Backup started
+  Normal  Completed  11s   local-webserver        Backup completed

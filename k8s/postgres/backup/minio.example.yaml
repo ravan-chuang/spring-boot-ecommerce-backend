@@ -1,0 +1,71 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: phase4-minio
+  namespace: spring-boot-lab
+type: Opaque
+stringData:
+  ACCESS_KEY_ID: replace-with-local-access-key
+  ACCESS_SECRET_KEY: replace-with-local-secret
+  MINIO_ROOT_USER: replace-with-local-access-key
+  MINIO_ROOT_PASSWORD: replace-with-local-secret
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: phase4-minio
+  namespace: spring-boot-lab
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: phase4-minio
+  template:
+    metadata:
+      labels:
+        app: phase4-minio
+    spec:
+      containers:
+        - name: minio
+          image: minio/minio:latest
+          args:
+            - server
+            - /data
+            - --console-address
+            - ":9001"
+          envFrom:
+            - secretRef:
+                name: phase4-minio
+          ports:
+            - name: api
+              containerPort: 9000
+            - name: console
+              containerPort: 9001
+          readinessProbe:
+            httpGet:
+              path: /minio/health/ready
+              port: api
+            initialDelaySeconds: 3
+            periodSeconds: 2
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: phase4-minio
+  namespace: spring-boot-lab
+spec:
+  selector:
+    app: phase4-minio
+  ports:
+    - name: api
+      port: 9000
+      targetPort: api
+    - name: console
+      port: 9001
+      targetPort: console

@@ -1,0 +1,2 @@
+NAME                    READY   STATUS    RESTARTS   AGE   IP            NODE                     NOMINATED NODE   READINESS GATES
+postgres-ha-restore-1   1/1     Running   0          86s   10.244.3.13   spring-boot-ha-worker3   <none>           <none>
