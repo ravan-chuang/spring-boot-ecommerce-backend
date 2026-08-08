@@ -1,0 +1,4 @@
+NAME      READY   STATUS    RESTARTS      AGE     IP           NODE                     NOMINATED NODE   READINESS GATES
+kafka-0   1/1     Running   3 (31m ago)   4h50m   10.244.3.5   spring-boot-ha-worker3   <none>           <none>
+kafka-1   1/1     Running   5 (11m ago)   4h50m   10.244.2.6   spring-boot-ha-worker    <none>           <none>
+kafka-2   1/1     Running   3 (31m ago)   4h50m   10.244.1.3   spring-boot-ha-worker2   <none>           <none>

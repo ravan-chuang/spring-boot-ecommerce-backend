@@ -1,0 +1,21 @@
+=== Phase 5 Kafka Failure / Recovery Summary ===
+
+During broker/node failure:
+  KRaft leader ID       : N/A
+  KRaft leader epoch    : N/A
+  KRaft follower lag    : N/A
+  partitions at ISR=2   : 0/6
+  NOT_LEADER retries    : 2
+
+After recovery:
+  KRaft leader ID       : 1
+  KRaft leader epoch    : 2
+  KRaft follower lag    : 0
+  partitions at ISR=3   : 6/6
+
+Message durability:
+  Producer ACKed records    : 3733
+  Unique ACKed values       : 3733
+  Consumed records          : 6337
+  ACKed but missing count   : 0
+  RESULT: OBSERVED RPO = 0 ACKNOWLEDGED MESSAGES LOST

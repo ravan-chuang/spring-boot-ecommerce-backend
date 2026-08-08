@@ -1,0 +1,22 @@
+===== Kafka files =====
+k8s/kafka-ha/kafka.yaml
+
+===== Application Kafka properties =====
+src/main/resources/application.properties:22:spring.kafka.bootstrap-servers=${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+src/main/resources/application.properties:23:spring.kafka.consumer.group-id=ecommerce-event-consumer-v2
+src/main/resources/application.properties:24:spring.kafka.consumer.auto-offset-reset=earliest
+src/main/resources/application.properties:31:payment.idempotency.retention-hours=24
+src/main/resources/application.properties:70:# Outbox retry scheduling
+src/main/resources/application.properties:71:outbox.publisher.retry-base-delay-seconds=${OUTBOX_RETRY_BASE_DELAY_SECONDS:5}
+src/main/resources/application.properties:72:outbox.publisher.retry-max-delay-seconds=${OUTBOX_RETRY_MAX_DELAY_SECONDS:300}
+src/main/resources/application.properties:73:outbox.publisher.retry-jitter-factor=${OUTBOX_RETRY_JITTER_FACTOR:0.20}
+src/main/resources/application.properties:76:spring.kafka.producer.acks=all
+src/main/resources/application.properties:77:spring.kafka.producer.properties.enable.idempotence=true
+src/main/resources/application.properties:78:spring.kafka.producer.properties.max.in.flight.requests.per.connection=5
+src/main/resources/application-prod.properties:1:# Production: conservative retry and timeout settings
+src/main/resources/application-prod.properties:3:spring.kafka.producer.properties.request.timeout.ms=10000
+src/main/resources/application-prod.properties:4:spring.kafka.producer.properties.delivery.timeout.ms=30000
+src/main/resources/application-prod.properties:5:spring.kafka.producer.properties.retries=3
+src/main/resources/application-prod.properties:22:spring.kafka.producer.acks=all
+src/main/resources/application-prod.properties:23:spring.kafka.producer.properties.enable.idempotence=true
+src/main/resources/application-prod.properties:24:spring.kafka.producer.properties.max.in.flight.requests.per.connection=5

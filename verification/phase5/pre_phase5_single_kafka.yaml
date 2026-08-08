@@ -1,0 +1,118 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    deployment.kubernetes.io/revision: "1"
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"apps/v1","kind":"Deployment","metadata":{"annotations":{},"name":"kafka","namespace":"spring-boot-lab"},"spec":{"replicas":1,"selector":{"matchLabels":{"app":"kafka"}},"strategy":{"type":"Recreate"},"template":{"metadata":{"labels":{"app":"kafka"}},"spec":{"containers":[{"env":[{"name":"KAFKA_NODE_ID","value":"1"},{"name":"KAFKA_PROCESS_ROLES","value":"broker,controller"},{"name":"KAFKA_CONTROLLER_QUORUM_VOTERS","value":"1@localhost:9093"},{"name":"KAFKA_LISTENERS","value":"INTERNAL://:29092,CONTROLLER://:9093"},{"name":"KAFKA_ADVERTISED_LISTENERS","value":"INTERNAL://kafka:29092"},{"name":"KAFKA_LISTENER_SECURITY_PROTOCOL_MAP","value":"INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT"},{"name":"KAFKA_INTER_BROKER_LISTENER_NAME","value":"INTERNAL"},{"name":"KAFKA_CONTROLLER_LISTENER_NAMES","value":"CONTROLLER"},{"name":"KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR","value":"1"},{"name":"KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR","value":"1"},{"name":"KAFKA_TRANSACTION_STATE_LOG_MIN_ISR","value":"1"},{"name":"KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS","value":"0"}],"image":"apache/kafka:4.1.2","livenessProbe":{"failureThreshold":4,"periodSeconds":15,"tcpSocket":{"port":"internal"},"timeoutSeconds":2},"name":"kafka","ports":[{"containerPort":29092,"name":"internal"},{"containerPort":9093,"name":"controller"}],"readinessProbe":{"failureThreshold":6,"periodSeconds":5,"tcpSocket":{"port":"internal"},"timeoutSeconds":2},"resources":{"limits":{"cpu":"1","memory":"1536Mi"},"requests":{"cpu":"250m","memory":"512Mi"}},"startupProbe":{"failureThreshold":30,"periodSeconds":5,"tcpSocket":{"port":"internal"},"timeoutSeconds":2}}]}}}}
+  creationTimestamp: "2026-08-07T17:57:10Z"
+  generation: 1
+  name: kafka
+  namespace: spring-boot-lab
+  resourceVersion: "28695"
+  uid: 22c853a9-548c-4ee6-8b9a-40b76a26f2ae
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: kafka
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: kafka
+    spec:
+      containers:
+      - env:
+        - name: KAFKA_NODE_ID
+          value: "1"
+        - name: KAFKA_PROCESS_ROLES
+          value: broker,controller
+        - name: KAFKA_CONTROLLER_QUORUM_VOTERS
+          value: 1@localhost:9093
+        - name: KAFKA_LISTENERS
+          value: INTERNAL://:29092,CONTROLLER://:9093
+        - name: KAFKA_ADVERTISED_LISTENERS
+          value: INTERNAL://kafka:29092
+        - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
+          value: INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+        - name: KAFKA_INTER_BROKER_LISTENER_NAME
+          value: INTERNAL
+        - name: KAFKA_CONTROLLER_LISTENER_NAMES
+          value: CONTROLLER
+        - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
+          value: "1"
+        - name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR
+          value: "1"
+        - name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR
+          value: "1"
+        - name: KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS
+          value: "0"
+        image: apache/kafka:4.1.2
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 4
+          periodSeconds: 15
+          successThreshold: 1
+          tcpSocket:
+            port: internal
+          timeoutSeconds: 2
+        name: kafka
+        ports:
+        - containerPort: 29092
+          name: internal
+          protocol: TCP
+        - containerPort: 9093
+          name: controller
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 6
+          periodSeconds: 5
+          successThreshold: 1
+          tcpSocket:
+            port: internal
+          timeoutSeconds: 2
+        resources:
+          limits:
+            cpu: "1"
+            memory: 1536Mi
+          requests:
+            cpu: 250m
+            memory: 512Mi
+        startupProbe:
+          failureThreshold: 30
+          periodSeconds: 5
+          successThreshold: 1
+          tcpSocket:
+            port: internal
+          timeoutSeconds: 2
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+status:
+  availableReplicas: 1
+  conditions:
+  - lastTransitionTime: "2026-08-07T17:57:10Z"
+    lastUpdateTime: "2026-08-07T17:57:56Z"
+    message: ReplicaSet "kafka-9dc99c966" has successfully progressed.
+    reason: NewReplicaSetAvailable
+    status: "True"
+    type: Progressing
+  - lastTransitionTime: "2026-08-08T15:11:18Z"
+    lastUpdateTime: "2026-08-08T15:11:18Z"
+    message: Deployment has minimum availability.
+    reason: MinimumReplicasAvailable
+    status: "True"
+    type: Available
+  observedGeneration: 1
+  readyReplicas: 1
+  replicas: 1
+  terminatingReplicas: 0
+  updatedReplicas: 1
