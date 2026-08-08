@@ -19,7 +19,8 @@
     <description>Spring Boot backend learning lab</description>
 
     <properties>
-        <java.version>25</java.version>
+        
+        <postgresql.version>42.7.12</postgresql.version><java.version>25</java.version>
     </properties>
 
     <dependencyManagement>

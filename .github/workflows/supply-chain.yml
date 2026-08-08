@@ -1,0 +1,204 @@
+name: Supply Chain Security
+
+on:
+  workflow_dispatch:
+
+  pull_request:
+    branches:
+      - main
+    paths:
+      - Dockerfile
+      - pom.xml
+      - .mvn/**
+      - mvnw
+      - src/**
+      - k8s/**
+      - .github/workflows/supply-chain.yml
+      - scripts/verify_phase7_supply_chain.py
+      - scripts/deploy_image_digest.sh
+
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+    paths:
+      - Dockerfile
+      - pom.xml
+      - .mvn/**
+      - mvnw
+      - src/**
+      - k8s/**
+      - .github/workflows/supply-chain.yml
+      - scripts/verify_phase7_supply_chain.py
+      - scripts/deploy_image_digest.sh
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+  attestations: write
+  security-events: write
+
+concurrency:
+  group: supply-chain-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  supply-chain:
+    name: Build, scan, attest and sign
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      - name: Run tests
+        run: ./mvnw -B clean test
+
+      - name: Generate application SBOM
+        run: |
+          ./mvnw -B \
+            org.cyclonedx:cyclonedx-maven-plugin:makeAggregateBom \
+            -Dcyclonedx.outputFormat=json \
+            -Dcyclonedx.outputName=bom
+
+          test -s target/bom.json
+
+      - name: Upload application SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: application-sbom
+          path: target/bom.json
+          if-no-files-found: error
+
+      - name: Run Trivy filesystem scan
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: table
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Generate image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha
+            type=ref,event=tag
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build image for pull request
+        if: github.event_name == 'pull_request'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: phase7-local:${{ github.sha }}
+
+      - name: Scan pull-request image
+        if: github.event_name == 'pull_request'
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: phase7-local:${{ github.sha }}
+          format: table
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Build and push immutable image
+        if: github.event_name != 'pull_request'
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: false
+          sbom: false
+
+      - name: Install Cosign
+        if: github.event_name != 'pull_request'
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign image with GitHub OIDC
+        if: github.event_name != 'pull_request'
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          cosign sign --yes \
+            "${REGISTRY}/${IMAGE_NAME}@${DIGEST}"
+
+      - name: Generate image SBOM
+        if: github.event_name != 'pull_request'
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
+          format: cyclonedx-json
+          output-file: image-sbom.cdx.json
+
+      - name: Upload image SBOM
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: container-image-sbom
+          path: image-sbom.cdx.json
+          if-no-files-found: error
+
+      - name: Attest image provenance
+        if: github.event_name != 'pull_request'
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      - name: Record immutable image reference
+        if: github.event_name != 'pull_request'
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          mkdir -p verification/phase7
+
+          printf '%s@%s\n' \
+            "${REGISTRY}/${IMAGE_NAME}" \
+            "${DIGEST}" \
+            | tee verification/phase7/ci_image_digest.txt
+
+      - name: Upload supply-chain evidence
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: supply-chain-evidence
+          path: |
+            verification/phase7/ci_image_digest.txt
+            target/bom.json
+            image-sbom.cdx.json
+          if-no-files-found: error
