@@ -70,52 +70,36 @@ The review boundary is explicit: these results demonstrate **local failure-recov
 
 ---
 
-## System Architecture and Evidence Boundaries
+## System Architecture - Runtime Deployment View
+
+This view is intentionally limited to the deployed runtime topology. Build, signing, provenance, and artifact promotion are documented later as a separate delivery view.
 
 ```mermaid
-%%{init: {"theme": "base", "themeVariables": {"background": "#FFFFFF", "primaryColor": "#0A66FF", "primaryBorderColor": "#0057B8", "primaryTextColor": "#FFFFFF", "secondaryColor": "#0B1F33", "secondaryTextColor": "#FFFFFF", "tertiaryColor": "#F4F5F7", "tertiaryTextColor": "#071B2E", "lineColor": "#0057B8", "clusterBkg": "#FFFFFF", "clusterBorder": "#B8BDC7"}, "flowchart": {"curve": "basis", "nodeSpacing": 30, "rankSpacing": 38}}}%%
 flowchart TB
-    Client[Client / API consumer] -->|HTTP| Service[Kubernetes Service]
+    Client["Client / API consumer<br/>External actor"]
 
-    subgraph Delivery[Artifact identity and promotion]
-      Source[Git commit / PR] --> Pipeline[Tests + SBOMs + Trivy]
-      Pipeline --> Artifact[GHCR immutable digest\nCosign OIDC + provenance]
-      Artifact -->|digest-pinned promotion| Deploy[Kubernetes Deployment]
+    subgraph Runtime["E-Commerce Backend - Runtime Deployment View"]
+        subgraph AppTier["Kubernetes application tier"]
+            Service["Kubernetes Service"]
+            App["Spring Boot application x 3<br/>REST API · domain · security · session<br/>Outbox publisher · Kafka consumers<br/>HPA 3-8 · PDB"]
+        end
+
+        subgraph Stateful["Stateful runtime services"]
+            PG[("PostgreSQL 17 · CloudNativePG x 3<br/>Business · Outbox · DLT persistence")]
+            Redis[("Redis 7<br/>1 master + 2 replicas · 3 Sentinels")]
+            Kafka["Kafka 4.1.2 · KRaft x 3<br/>RF=3 / min ISR=2 test topic"]
+            Restore["WAL archive + physical backup<br/>Independent restore"]
+        end
+
+        Observability["Prometheus · Grafana<br/>Tempo · Loki"]
     end
 
-    subgraph App[Spring Boot application tier]
-      A[Replica A]
-      B[Replica B]
-      C[Replica C]
-      Domain[Domain + security + session\ntransaction orchestration]
-      A --> Domain
-      B --> Domain
-      C --> Domain
-    end
-
-    Deploy --> A
-    Deploy --> B
-    Deploy --> C
-    Service --> A
-    Service --> B
-    Service --> C
-
-    subgraph State[State and event infrastructure]
-      PG[(PostgreSQL 17 / CloudNativePG\n3 instances; synchronous quorum)]
-      Redis[(Redis 7\n1 master + 2 replicas; 3 Sentinels)]
-      Outbox[(outbox_events)] --> Kafka[Kafka 4.1.2 KRaft\n3 broker/controllers]
-      Kafka --> Consumer[Idempotent consumers]
-      Consumer --> DLT[(Persisted DLT + audit)]
-      PG --> Backup[Barman Cloud object store\nWAL archive + physical backup + restore]
-    end
-
-    Domain --> PG
-    Domain --> Redis
-    Domain --> Outbox
-
-    A -. metrics / logs / traces .-> Obs[Prometheus / Grafana\nTempo / Loki]
-    B -. metrics / logs / traces .-> Obs
-    C -. metrics / logs / traces .-> Obs
+    Client -->|HTTP| Service --> App
+    App -->|Transactional JDBC| PG
+    App -->|Session / cache| Redis
+    App <-->|Publish / consume| Kafka
+    App -.->|Metrics · logs · traces| Observability
+    PG -->|Archive / restore| Restore
 ```
 
 ### Availability boundary
@@ -165,15 +149,22 @@ Database constraints protect one payment per order and one replay identity per `
 ## Transactional Outbox and Consumer Safety
 
 ```mermaid
-%%{init: {"theme": "base", "themeVariables": {"background": "#FFFFFF", "primaryColor": "#0A66FF", "primaryBorderColor": "#0057B8", "primaryTextColor": "#FFFFFF", "secondaryColor": "#0B1F33", "secondaryTextColor": "#FFFFFF", "tertiaryColor": "#F4F5F7", "tertiaryTextColor": "#071B2E", "lineColor": "#0057B8"}, "flowchart": {"curve": "basis", "nodeSpacing": 32, "rankSpacing": 38}}}%%
-flowchart LR
-    P[PENDING] -->|FOR UPDATE SKIP LOCKED| X[PROCESSING\nowner + lease]
-    X -->|Kafka ACK| D[PUBLISHED]
-    X -->|send failure; attempts remain| R[SCHEDULED RETRY\nnext_attempt_at]
-    R -->|due| P
-    X -. lease expires .-> P
-    X -->|max attempts| F[FAILED]
-    F -. ADMIN replay approval .-> P
+stateDiagram-v2
+    [*] --> PENDING: business transaction commits
+    PENDING --> PROCESSING: due row claimed / SKIP LOCKED
+    PROCESSING --> PUBLISHED: Kafka ACK
+    PROCESSING --> PENDING: send failure / attempts remain / next_attempt_at scheduled
+    PROCESSING --> PENDING: ownership lease expires
+    PROCESSING --> FAILED: maximum attempts exhausted
+    FAILED --> PENDING: approved ADMIN replay
+    PUBLISHED --> [*]
+
+    note right of PENDING
+        Claim eligibility is governed by next_attempt_at
+    end note
+    note right of FAILED
+        Terminal until an approved ADMIN replay
+    end note
 ```
 
 Consumers treat duplicate Kafka delivery as expected. `(event_id, consumer_name)` is persisted with the side effect in one transaction; duplicate insertion skips the effect, and failed side effects roll back both the effect and dedup marker.
@@ -314,6 +305,23 @@ Observed behavior:
 ---
 
 ## Phase 7 - Software Supply-Chain Security
+
+### Delivery and artifact provenance view
+
+This delivery view is intentionally separate from the runtime Deployment View. It describes artifact identity and promotion controls, not deployed request or state flow.
+
+```mermaid
+flowchart LR
+    Commit["Git commit / PR"] --> Verify["Java 25 regression tests"]
+    Verify --> AppSBOM["CycloneDX application SBOM"]
+    AppSBOM --> SourceGate["Trivy filesystem gate<br/>HIGH / CRITICAL"]
+    SourceGate --> Build["Container build"]
+    Build --> ImageGate["Trivy image gate<br/>HIGH / CRITICAL"]
+    ImageGate --> Digest["GHCR immutable digest"]
+    Digest --> Sign["Cosign keyless signing<br/>GitHub OIDC"]
+    Sign --> Evidence["Image SBOM + build provenance"]
+    Evidence --> Promote["Digest-pinned Kubernetes<br/>deployment input"]
+```
 
 The repository now has a dedicated GitHub Actions supply-chain workflow that performs:
 
