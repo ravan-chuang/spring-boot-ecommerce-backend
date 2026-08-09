@@ -40,7 +40,7 @@ JaCoCo:     89.54% instruction / 73.63% branch
 Classes:    111 analyzed
 ```
 
-`HEAD` and `origin/main` both resolved to `67d2cf9`. The inspected source, configuration, infrastructure, and verification paths matched the repository commit. README, engineering summary, and portfolio were active documentation edits; the working tree is therefore not represented as globally clean.
+The Phase 8 documentation baseline is preserved by `phase8-docs-final` at `929bee0`, while the OCI infrastructure milestone is preserved by `phase8-oci-iac` at `ed626cb`. These immutable tags are used as the evidence baselines instead of hard-coding a moving `main` HEAD into the document.
 
 ### 1.2 Version scope
 

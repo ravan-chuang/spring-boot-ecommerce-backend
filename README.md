@@ -8,7 +8,7 @@ This repository is deliberately described by evidence rather than by configurati
 
 > **Verified repository baseline — 2026-08-10**
 >
-> - `main` and `origin/main`: **`67d2cf9`**
+> - Phase 8 documentation baseline: **`phase8-docs-final` → `929bee0`**
 > - Phase 8 OCI milestone: **`phase8-oci-iac` → `ed626cb`**
 > - Phase 8 final documentation: **`phase8-docs-final` → `929bee0`**
 > - Independent clean-clone run: **146 tests passed, 0 failed, 0 errors, 0 skipped**
