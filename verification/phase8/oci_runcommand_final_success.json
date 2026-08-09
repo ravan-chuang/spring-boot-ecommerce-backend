@@ -1,0 +1,19 @@
+{
+  "data": {
+    "content": {
+      "exit-code": 0,
+      "message": "{\"execExitCode\":0,\"runtime\":\"9ms\"}",
+      "output-type": "TEXT",
+      "text": "FINAL_RUN_COMMAND_OK\ninstance-20260728-0108\nocarun\nSun Aug  9 08:12:52 PM UTC 2026\n",
+      "text-sha256": ""
+    },
+    "delivery-state": "ACKED",
+    "display-name": null,
+    "instance-agent-command-id": "ocid1.instanceagentcommand.oc1.ap-tokyo-1.amaaaaaayocitpqab2vytrtmxdkbcbd2u2y4xev3szcrfc6fd4sr3lmjakwq",
+    "instance-id": "ocid1.instance.oc1.ap-tokyo-1.anxhiljryocitpqcgxmoqfnrb7zozsi4c7xmg6t4nge7eexehqk4kqc36y3a",
+    "lifecycle-state": "SUCCEEDED",
+    "sequence-number": 9799734,
+    "time-created": "2026-08-09T20:10:58.799000+00:00",
+    "time-updated": "2026-08-09T20:12:55.373000+00:00"
+  }
+}

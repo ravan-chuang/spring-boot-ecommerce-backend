@@ -1,0 +1,82 @@
+{
+  "data": [
+    {
+      "aggregated-datapoints": [
+        {
+          "timestamp": "2026-08-09T19:09:00+00:00",
+          "value": 0.3166542687566375
+        },
+        {
+          "timestamp": "2026-08-09T19:10:00+00:00",
+          "value": 0.23346271497061286
+        },
+        {
+          "timestamp": "2026-08-09T19:11:00+00:00",
+          "value": 0.2501168043286846
+        },
+        {
+          "timestamp": "2026-08-09T19:12:00+00:00",
+          "value": 0.2584209938578028
+        },
+        {
+          "timestamp": "2026-08-09T19:13:00+00:00",
+          "value": 0.27505002497777203
+        },
+        {
+          "timestamp": "2026-08-09T19:14:00+00:00",
+          "value": 0.2666875980075455
+        },
+        {
+          "timestamp": "2026-08-09T19:15:00+00:00",
+          "value": 0.2416751167113961
+        },
+        {
+          "timestamp": "2026-08-09T19:16:00+00:00",
+          "value": 1.3198043881518549
+        },
+        {
+          "timestamp": "2026-08-09T19:17:00+00:00",
+          "value": 0.233400154284059
+        },
+        {
+          "timestamp": "2026-08-09T19:18:00+00:00",
+          "value": 0.2251543690232284
+        },
+        {
+          "timestamp": "2026-08-09T19:19:00+00:00",
+          "value": 0.2999543603879293
+        },
+        {
+          "timestamp": "2026-08-09T19:20:00+00:00",
+          "value": 0.32519611476918
+        },
+        {
+          "timestamp": "2026-08-09T19:21:00+00:00",
+          "value": 12.52962277534965
+        }
+      ],
+      "compartment-id": "ocid1.tenancy.oc1..aaaaaaaawxntenk4nik5w4fy5ep74ociiao2gwwfvhx7ci2n5unuarwprmgq",
+      "dimensions": {
+        "availabilityDomain": "tjZz:AP-TOKYO-1-AD-1",
+        "dedicatedVmHostId": "DefaultVmHostId",
+        "faultDomain": "FAULT-DOMAIN-1",
+        "imageId": "ocid1.image.oc1.ap-tokyo-1.aaaaaaaa55xelmeb6xsqhvse4dtgzk2fcx2q6ev2rmmagjon6lnqdsx2yxfa",
+        "instancePoolId": "Default",
+        "region": "ap-tokyo-1",
+        "resourceDisplayName": "instance-20260728-0108",
+        "resourceId": "ocid1.instance.oc1.ap-tokyo-1.anxhiljryocitpqcgxmoqfnrb7zozsi4c7xmg6t4nge7eexehqk4kqc36y3a",
+        "shape": "VM.Standard.E2.1.Micro"
+      },
+      "metadata": {
+        "displayName": "CPU Utilization",
+        "maxRange": "100",
+        "minRange": "0",
+        "unit": "Percent"
+      },
+      "name": "CpuUtilization",
+      "namespace": "oci_computeagent",
+      "resolution": null,
+      "resource-group": null
+    }
+  ]
+}

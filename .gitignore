@@ -73,3 +73,20 @@ k8s/base/*-secret.yaml
 
 # CloudNativePG local secrets
 k8s/postgres-ha/*-secret.yaml
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+terraform.tfvars
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# OCI local credentials
+.oci/
+*.pem
+*.key

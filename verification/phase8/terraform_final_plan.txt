@@ -1,0 +1,25 @@
+data.oci_core_subnets.public: Reading...
+data.oci_core_instances.springboot: Reading...
+data.oci_core_vcns.springboot: Reading...
+oci_core_vcn.springboot: Refreshing state... [id=ocid1.vcn.oc1.ap-tokyo-1.amaaaaaayocitpqaftfhewbbksz6odbarr4avvyzn24g6brejb3pj2wwdiuq]
+oci_core_network_security_group.springboot_ingress: Refreshing state... [id=ocid1.networksecuritygroup.oc1.ap-tokyo-1.aaaaaaaawqcct4gfza3qhmycfg5xpcevc4vdeojxj7laywabjzb3frldzimq]
+oci_core_network_security_group.springboot_egress_legacy: Refreshing state... [id=ocid1.networksecuritygroup.oc1.ap-tokyo-1.aaaaaaaa6xadpsghzjeg64e573urbtmmyvfv74564h7eny6ijsacyzdlin2q]
+oci_core_internet_gateway.springboot: Refreshing state... [id=ocid1.internetgateway.oc1.ap-tokyo-1.aaaaaaaage4p7stggktrogptzgm44urpsf7nk34r46mzuojemyz3lk5q24gq]
+oci_core_security_list.springboot_default: Refreshing state... [id=ocid1.securitylist.oc1.ap-tokyo-1.aaaaaaaaqnryzsaia2uo6obbbwphi2gqamoodv3aur3idyyzm5uojahi754a]
+data.oci_core_vcns.springboot: Read complete after 0s [id=CoreVcnsDataSource-231929223]
+data.oci_core_subnets.public: Read complete after 0s [id=CoreSubnetsDataSource-1937592288]
+data.oci_core_instances.springboot: Read complete after 0s [id=CoreInstancesDataSource-3598284330]
+oci_core_route_table.springboot_default: Refreshing state... [id=ocid1.routetable.oc1.ap-tokyo-1.aaaaaaaayi33wugycaduffxj2cqpwlndqn7nrkfqkaqd6kry3sozo52pr3ra]
+oci_core_network_security_group_security_rule.ssh: Refreshing state... [id=E5EC92]
+oci_core_network_security_group_security_rule.ingress_egress_all: Refreshing state... [id=F06F62]
+oci_core_network_security_group_security_rule.https: Refreshing state... [id=9E996B]
+oci_core_network_security_group_security_rule.http: Refreshing state... [id=6D9BDF]
+oci_core_network_security_group_security_rule.spring_boot: Refreshing state... [id=119DE6]
+oci_core_network_security_group_security_rule.legacy_egress_all: Refreshing state... [id=310BF2]
+oci_core_subnet.public: Refreshing state... [id=ocid1.subnet.oc1.ap-tokyo-1.aaaaaaaabfnppadages44qmxpp3ztnsxotanx4l4oxx2pro6hotbgrz3xd4q]
+oci_core_instance.springboot: Refreshing state... [id=ocid1.instance.oc1.ap-tokyo-1.anxhiljryocitpqcgxmoqfnrb7zozsi4c7xmg6t4nge7eexehqk4kqc36y3a]
+
+No changes. Your infrastructure matches the configuration.
+
+Terraform has compared your real infrastructure against your configuration
+and found no differences, so no changes are needed.
