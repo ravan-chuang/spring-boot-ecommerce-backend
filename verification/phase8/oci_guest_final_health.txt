@@ -1,0 +1,56 @@
+===== SYSTEM =====
+instance-20260728-0108
+Linux instance-20260728-0108 6.12.0-204.92.4.3.1.el9uek.x86_64 #2 SMP PREEMPT_DYNAMIC Wed Jul 15 14:14:12 PDT 2026 x86_64 x86_64 x86_64 GNU/Linux
+ 20:14:21 up 15 min,  0 users,  load average: 0.01, 0.07, 0.12
+
+===== MEMORY =====
+               total        used        free      shared  buff/cache   available
+Mem:           946Mi       453Mi       138Mi       3.0Mi       496Mi       492Mi
+Swap:          497Mi          0B       497Mi
+
+===== DISK =====
+Filesystem                  Size  Used Avail Use% Mounted on
+/dev/mapper/ocivolume-root   30G  5.4G   25G  19% /
+
+===== SSHD =====
+● sshd.service - OpenSSH server daemon
+     Loaded: loaded (/usr/lib/systemd/system/sshd.service; enabled; preset: enabled)
+     Active: active (running) since Sun 2026-08-09 19:59:58 GMT; 14min ago
+       Docs: man:sshd(8)
+             man:sshd_config(5)
+   Main PID: 2238 (sshd)
+      Tasks: 1 (limit: 5113)
+     Memory: 5.4M (peak: 6.2M)
+        CPU: 306ms
+     CGroup: /system.slice/sshd.service
+             └─2238 "sshd: /usr/sbin/sshd -D [listener] 0 of 10-100 startups"
+
+Aug 09 20:04:04 instance-20260728-0108 sshd-session[4698]: Invalid user ubuntu from 111.252.201.220 port 62839
+Aug 09 20:04:04 instance-20260728-0108 sshd-session[4698]: Connection closed by invalid user ubuntu 111.252.201.220 port 62839 [preauth]
+Aug 09 20:04:05 instance-20260728-0108 sshd-session[4700]: Accepted publickey for opc from 111.252.201.220 port 62840 ssh2: RSA SHA256:XTCuVaQ6gT86jSwgWx22U31TfYu0+0NSYBlh4eHMIgY
+Aug 09 20:04:05 instance-20260728-0108 sshd-session[4700]: pam_unix(sshd:session): session opened for user opc(uid=1000) by opc(uid=0)
+Aug 09 20:04:06 instance-20260728-0108 sshd-session[4700]: pam_unix(sshd:session): session closed for user opc
+Aug 09 20:07:07 instance-20260728-0108 sshd-session[4750]: Connection closed by authenticating user root 193.32.162.84 port 58628 [preauth]
+Aug 09 20:07:17 instance-20260728-0108 sshd-session[4752]: Accepted publickey for opc from 111.252.201.220 port 62951 ssh2: RSA SHA256:XTCuVaQ6gT86jSwgWx22U31TfYu0+0NSYBlh4eHMIgY
+Aug 09 20:07:18 instance-20260728-0108 sshd-session[4752]: pam_unix(sshd:session): session opened for user opc(uid=1000) by opc(uid=0)
+Aug 09 20:14:20 instance-20260728-0108 sshd-session[4874]: Accepted publickey for opc from 111.252.201.220 port 63188 ssh2: RSA SHA256:XTCuVaQ6gT86jSwgWx22U31TfYu0+0NSYBlh4eHMIgY
+Aug 09 20:14:20 instance-20260728-0108 sshd-session[4874]: pam_unix(sshd:session): session opened for user opc(uid=1000) by opc(uid=0)
+
+===== ORACLE CLOUD AGENT =====
+● oracle-cloud-agent.service - Oracle Cloud Infrastructure agent for management and monitoring
+     Loaded: loaded (/etc/systemd/system/oracle-cloud-agent.service; enabled; preset: disabled)
+     Active: active (running) since Sun 2026-08-09 19:59:57 GMT; 14min ago
+       Docs: https://docs.cloud.oracle.com/iaas/
+   Main PID: 2218 (agent)
+      Tasks: 22 (limit: 5113)
+     Memory: 89.1M (peak: 90.3M)
+        CPU: 3.610s
+     CGroup: /oca.slice/oracle-cloud-agent.service
+             ├─2218 /usr/libexec/oracle-cloud-agent/agent
+             ├─2431 /usr/libexec/oracle-cloud-agent/plugins/gomon/gomon
+             └─2455 /usr/libexec/oracle-cloud-agent/plugins/oci-wlp/oci-wlp
+
+Aug 09 19:59:57 instance-20260728-0108 systemd[1]: Started Oracle Cloud Infrastructure agent for management and monitoring.
+Aug 09 20:00:00 instance-20260728-0108 agent[2218]: 2026/08/09 20:00:00 osName:Oracle Linux Server, osVersion:9.8
+Aug 09 20:00:00 instance-20260728-0108 agent[2218]: 2026/08/09 20:00:00.168178 logger.go:38: logFilepath: /var/log/oracle-cloud-agent/agent.log, expanded: /var/log/oracle-cloud-agent/agent.log
+Aug 09 20:00:13 instance-20260728-0108 sudo[2870]: oracle-cloud-agent : PWD=/var/lib/oracle-cloud-agent ; USER=ocarun ; COMMAND=/usr/libexec/oracle-cloud-agent/plugins/runcommand/runcommand
