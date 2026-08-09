@@ -2,11 +2,11 @@
 
 [![CI](https://github.com/ravan-chuang/spring-boot-ecommerce-backend/actions/workflows/ci.yml/badge.svg)](https://github.com/ravan-chuang/spring-boot-ecommerce-backend/actions/workflows/ci.yml)
 
-A production-minded distributed event-driven commerce backend built with **Java 25**, **Spring Boot 4.1.0**, **PostgreSQL 17**, **Redis 7**, **Apache Kafka 4.1.2**, and **Kubernetes 1.36.1**. The project is engineered around transaction correctness, idempotency, durable event delivery, stateful failover, observability, deployment recovery, and evidence-backed reliability claims.
+A production-minded, event-driven commerce backend built with **Java 25**, **Spring Boot 4.1.0**, **PostgreSQL 17**, **Redis 7**, **Apache Kafka 4.1.2**, and **Kubernetes 1.36.1**. The engineering focus is end-to-end correctness: transactional state changes, idempotent commands, durable event delivery, stateful failover, observable recovery, controlled artifact promotion, and claims that remain traceable to executed evidence.
 
-The current milestone has moved materially beyond an application-only HA demo. In the local multi-worker kind environment, the repository now verifies a **three-replica Spring Boot tier**, **CloudNativePG PostgreSQL HA with physical backup/restore**, **three-node Kafka KRaft**, **Redis replication with Sentinel failover**, and a **software supply-chain pipeline with SBOMs, vulnerability gates, keyless signing, provenance, and digest-pinned promotion**.
+The current milestone extends materially beyond an application-only HA demonstration. In the local multi-worker kind environment, the repository verifies a **three-replica Spring Boot tier**, **CloudNativePG PostgreSQL HA with physical backup/restore**, **three-node Kafka KRaft**, **Redis replication with Sentinel failover**, and a **software supply-chain pipeline with SBOMs, vulnerability gates, keyless signing, provenance, and digest-pinned promotion**.
 
-The boundary remains explicit: these results demonstrate **local failure-recovery mechanics under the tested scenarios**, not cloud multi-zone production availability. The kind control plane remains single-node; persistent storage and object storage are local; Redis replication is asynchronous; external secrets/workload identity and verified cloud/IaC delivery are not yet established; historical production SLO/RPO/RTO attainment is not claimed.
+The review boundary is explicit: these results demonstrate **local failure-recovery mechanics under the tested scenarios**, not cloud multi-zone production availability. The kind control plane remains single-node; persistent storage and object storage are local; Redis replication is asynchronous; external secrets/workload identity and verified cloud/IaC delivery are not yet established; historical production SLO/RPO/RTO attainment is not claimed.
 
 **Current verified release:** `v1.9.0-phase7-supply-chain`
 **Current main commit:** `6230e8c`
@@ -15,7 +15,7 @@ The boundary remains explicit: these results demonstrate **local failure-recover
 
 ---
 
-## Current Engineering Position
+## Verified Engineering Baseline
 
 | Area | Current verified state | Claim boundary |
 |---|---|---|
@@ -70,13 +70,18 @@ The boundary remains explicit: these results demonstrate **local failure-recover
 
 ---
 
-## Current Architecture
+## System Architecture and Evidence Boundaries
 
 ```mermaid
-%%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 26, "rankSpacing": 34}}}%%
+%%{init: {"theme": "base", "themeVariables": {"background": "#FFFFFF", "primaryColor": "#0A66FF", "primaryBorderColor": "#0057B8", "primaryTextColor": "#FFFFFF", "secondaryColor": "#0B1F33", "secondaryTextColor": "#FFFFFF", "tertiaryColor": "#F4F5F7", "tertiaryTextColor": "#071B2E", "lineColor": "#0057B8", "clusterBkg": "#FFFFFF", "clusterBorder": "#B8BDC7"}, "flowchart": {"curve": "basis", "nodeSpacing": 30, "rankSpacing": 38}}}%%
 flowchart TB
-    Client[Client / API consumer] --> Service[Kubernetes Service / edge boundary]
-    Supply[CI supply chain\nSBOM + Trivy + Cosign + provenance] -. immutable digest .-> Service
+    Client[Client / API consumer] -->|HTTP| Service[Kubernetes Service]
+
+    subgraph Delivery[Artifact identity and promotion]
+      Source[Git commit / PR] --> Pipeline[Tests + SBOMs + Trivy]
+      Pipeline --> Artifact[GHCR immutable digest\nCosign OIDC + provenance]
+      Artifact -->|digest-pinned promotion| Deploy[Kubernetes Deployment]
+    end
 
     subgraph App[Spring Boot application tier]
       A[Replica A]
@@ -88,23 +93,29 @@ flowchart TB
       C --> Domain
     end
 
+    Deploy --> A
+    Deploy --> B
+    Deploy --> C
     Service --> A
     Service --> B
     Service --> C
 
-    Domain --> PG[(PostgreSQL 17 / CloudNativePG\n3 instances, synchronous quorum)]
-    Domain --> Redis[(Redis 7\n1 master + 2 replicas + 3 Sentinels)]
-    Domain --> Outbox[(outbox_events)]
+    subgraph State[State and event infrastructure]
+      PG[(PostgreSQL 17 / CloudNativePG\n3 instances; synchronous quorum)]
+      Redis[(Redis 7\n1 master + 2 replicas; 3 Sentinels)]
+      Outbox[(outbox_events)] --> Kafka[Kafka 4.1.2 KRaft\n3 broker/controllers]
+      Kafka --> Consumer[Idempotent consumers]
+      Consumer --> DLT[(Persisted DLT + audit)]
+      PG --> Backup[Barman Cloud object store\nWAL archive + physical backup + restore]
+    end
 
-    Outbox --> Kafka[Kafka 4.1.2 KRaft\n3 broker/controllers]
-    Kafka --> Consumer[Idempotent consumers]
-    Consumer --> DLT[(Persisted DLT + audit)]
+    Domain --> PG
+    Domain --> Redis
+    Domain --> Outbox
 
-    PG --> Backup[Barman Cloud object store\nWAL archive + physical backup + restore]
-
-    A -. telemetry .-> Obs[Prometheus / Grafana / Tempo / Loki]
-    B -. telemetry .-> Obs
-    C -. telemetry .-> Obs
+    A -. metrics / logs / traces .-> Obs[Prometheus / Grafana\nTempo / Loki]
+    B -. metrics / logs / traces .-> Obs
+    C -. metrics / logs / traces .-> Obs
 ```
 
 ### Availability boundary
@@ -119,7 +130,7 @@ Storage:           local PVs + local MinIO object store
 Cloud/IaC:         not yet verified
 ```
 
-The architecture is now substantially more resilient than the Phase 3.3 baseline, but **local HA is not equivalent to production multi-zone durability**.
+This topology is materially more resilient than the Phase 3.3 baseline. The accurate conclusion remains narrower: **local HA is not equivalent to production multi-zone durability**.
 
 ---
 
@@ -154,15 +165,15 @@ Database constraints protect one payment per order and one replay identity per `
 ## Transactional Outbox and Consumer Safety
 
 ```mermaid
-%%{init: {"flowchart": {"curve": "basis"}}}%%
+%%{init: {"theme": "base", "themeVariables": {"background": "#FFFFFF", "primaryColor": "#0A66FF", "primaryBorderColor": "#0057B8", "primaryTextColor": "#FFFFFF", "secondaryColor": "#0B1F33", "secondaryTextColor": "#FFFFFF", "tertiaryColor": "#F4F5F7", "tertiaryTextColor": "#071B2E", "lineColor": "#0057B8"}, "flowchart": {"curve": "basis", "nodeSpacing": 32, "rankSpacing": 38}}}%%
 flowchart LR
     P[PENDING] -->|FOR UPDATE SKIP LOCKED| X[PROCESSING\nowner + lease]
     X -->|Kafka ACK| D[PUBLISHED]
     X -->|send failure; attempts remain| R[SCHEDULED RETRY\nnext_attempt_at]
     R -->|due| P
-    X -->|lease expires| P
+    X -. lease expires .-> P
     X -->|max attempts| F[FAILED]
-    F -->|ADMIN replay| P
+    F -. ADMIN replay approval .-> P
 ```
 
 Consumers treat duplicate Kafka delivery as expected. `(event_id, consumer_name)` is persisted with the side effect in one transaction; duplicate insertion skips the effect, and failed side effects roll back both the effect and dedup marker.
@@ -198,7 +209,7 @@ The application Deployment retains the Phase 3/3.3 controls:
 | Replacement Ready / EndpointSlice convergence | ~T+94s |
 | Final Deployment | 3/3 Ready |
 
-This proves automatic recovery in the tested environment. It **does not** prove zero-downtime continuity under abrupt worker loss, and the request-count ratio is not used as a production availability SLI.
+**Engineering conclusion:** automatic recovery passed in the tested environment. Zero-downtime continuity under abrupt worker loss did not, and the request-count ratio is not used as a production availability SLI.
 
 ---
 
@@ -219,7 +230,7 @@ CloudNativePG replaced the earlier single PostgreSQL Pod with a 3-instance Postg
 - Acknowledged writes missing after failover: **0**.
 - Final cluster: 3/3 healthy.
 
-**Interpretation:** observed RPO is zero only for writes that had a captured successful client acknowledgement in this experiment.
+**Engineering conclusion:** observed RPO is zero only for writes that had a captured successful client acknowledgement in this experiment.
 
 ### Backup and restore result
 
@@ -269,7 +280,7 @@ Observed behavior:
 | Consumed records after recovery | 6,337 |
 | Captured ACKed values missing from Kafka | 0 |
 
-**Observed RPO = 0 acknowledged messages lost** for the captured acknowledgement set. This is not a universal zero-loss guarantee across arbitrary failure modes.
+**Engineering conclusion:** **observed RPO = 0 acknowledged messages lost** for the captured acknowledgement set. This is not a universal zero-loss guarantee across arbitrary failure modes.
 
 ---
 
@@ -298,7 +309,7 @@ Observed behavior:
 - post-failover data was readable from all Redis nodes;
 - targeted application Redis/Lettuce error scan found no failover-related error in the collected logs.
 
-Because Redis replication is asynchronous, this experiment does **not** claim a general zero-RPO guarantee for writes immediately preceding failure.
+**Engineering conclusion:** failover and convergence passed for the explicitly checked data and write path. Because Redis replication is asynchronous, this experiment does **not** claim a general zero-RPO guarantee for writes immediately preceding failure.
 
 ---
 
@@ -406,7 +417,7 @@ These are reproducible local profiles, not production capacity or SLA guarantees
 
 ---
 
-## Engineering Assessment
+## Senior Engineering Assessment
 
 Under strict industry review, the repository is best described as **advanced student-level / strong junior backend-platform engineering evidence**, with several areas showing **early mid-level reliability reasoning**: transactional boundary design, failure injection, acknowledgement/data reconciliation, stateful failover validation, negative-result preservation, and supply-chain controls.
 

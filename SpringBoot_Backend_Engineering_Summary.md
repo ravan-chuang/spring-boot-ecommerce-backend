@@ -2,7 +2,9 @@
 
 ## Executive Summary
 
-This repository is a production-minded distributed event-driven commerce backend built with Java 25 and Spring Boot 4.1.0. Its value is not a large framework list; it is the integration of transactional correctness, idempotency, asynchronous delivery, stateful high availability, observability, failure recovery, and artifact governance into one evidence-driven engineering system.
+This repository is a production-minded, event-driven commerce backend built with Java 25 and Spring Boot 4.1.0. Its engineering value is not the size of its framework list; it is the integration of transactional correctness, idempotency, asynchronous delivery, stateful high availability, observability, failure recovery, and artifact governance into one evidence-driven system.
+
+This summary applies a senior-review lens: design intent, implemented controls, executed evidence, and claim boundaries are kept separate. A configured mechanism is not promoted to a reliability result until the corresponding behavior has been exercised and reconciled.
 
 The current verified milestone is `v1.9.0-phase7-supply-chain` on main commit `6230e8c`. Since the earlier Phase 3.3 portfolio snapshot, the project has completed four additional reliability phases:
 
@@ -15,9 +17,9 @@ The precise engineering classification is now:
 
 > **A locally verified distributed backend with multi-replica application recovery and single-node-failure tolerance demonstrated for PostgreSQL, Kafka, and Redis under explicitly tested conditions. It is not production-proven multi-zone HA because the control plane, storage/object-store failure domains, cloud networking, workload identity, external secrets, and production SLO/RPO/RTO operation remain unverified.**
 
-From a strict senior-review perspective, the project is stronger than a typical CRUD portfolio. It demonstrates advanced student / strong junior backend-platform capability, with selected reliability practices approaching early mid-level reasoning. It still does not substitute for real production ownership.
+Under strict engineering review, the project is stronger than a typical CRUD portfolio. It demonstrates advanced student / strong junior backend-platform capability, with selected reliability practices approaching early mid-level reasoning. It still does not substitute for real production ownership.
 
-## Current Verified Baseline
+## Verified Engineering Baseline
 
 | Item | Current state |
 |---|---|
@@ -45,39 +47,52 @@ Claims are split into four classes:
 
 Configuration alone is not treated as evidence of runtime behavior.
 
-## System Architecture
+## System Architecture and Control Boundaries
 
 ```mermaid
-%%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 25, "rankSpacing": 34}}}%%
+%%{init: {"theme": "base", "themeVariables": {"background": "#FFFFFF", "primaryColor": "#0A66FF", "primaryBorderColor": "#0057B8", "primaryTextColor": "#FFFFFF", "secondaryColor": "#0B1F33", "secondaryTextColor": "#FFFFFF", "tertiaryColor": "#F4F5F7", "tertiaryTextColor": "#071B2E", "lineColor": "#0057B8", "clusterBkg": "#FFFFFF", "clusterBorder": "#B8BDC7"}, "flowchart": {"curve": "basis", "nodeSpacing": 30, "rankSpacing": 38}}}%%
 flowchart TB
-    Client[Client / API consumer] --> Svc[Kubernetes Service / edge]
-    Supply[CI supply chain\nSBOM + Trivy + Cosign + provenance] -. immutable digest .-> Svc
+    Client[Client / API consumer] -->|HTTP| Svc[Kubernetes Service]
+
+    subgraph Delivery[Artifact identity and promotion]
+      Source[Git commit / PR] --> Pipeline[Tests + SBOMs + Trivy]
+      Pipeline --> Artifact[GHCR immutable digest\nCosign OIDC + provenance]
+      Artifact -->|digest-pinned promotion| Deploy[Kubernetes Deployment]
+    end
 
     subgraph App[Spring Boot application tier]
       A[Replica A]
       B[Replica B]
       C[Replica C]
-      Domain[Domain + Security + Session Services]
+      Domain[Domain + security + session\ntransaction orchestration]
       A --> Domain
       B --> Domain
       C --> Domain
     end
 
+    Deploy --> A
+    Deploy --> B
+    Deploy --> C
     Svc --> A
     Svc --> B
     Svc --> C
 
-    Domain --> PG[(PostgreSQL 17 / CloudNativePG\n3 instances)]
-    Domain --> Redis[(Redis 7\n1 master + 2 replicas + 3 Sentinels)]
-    Domain --> Outbox[(Outbox)]
-    Outbox --> Kafka[Kafka 4.1.2 KRaft\n3 broker/controllers]
-    Kafka --> Consumers[Idempotent consumers]
-    Consumers --> DLT[(Persisted DLT + audit)]
-    PG --> Backup[WAL archive + physical backup + restore]
+    subgraph State[State and event infrastructure]
+      PG[(PostgreSQL 17 / CloudNativePG\n3 instances; synchronous quorum)]
+      Redis[(Redis 7\n1 master + 2 replicas; 3 Sentinels)]
+      Outbox[(outbox_events)] --> Kafka[Kafka 4.1.2 KRaft\n3 broker/controllers]
+      Kafka --> Consumers[Idempotent consumers]
+      Consumers --> DLT[(Persisted DLT + audit)]
+      PG --> Backup[Barman Cloud object store\nWAL archive + physical backup + restore]
+    end
 
-    A -.-> Obs[Prometheus / Grafana / Tempo / Loki]
-    B -.-> Obs
-    C -.-> Obs
+    Domain --> PG
+    Domain --> Redis
+    Domain --> Outbox
+
+    A -. metrics / logs / traces .-> Obs[Prometheus / Grafana\nTempo / Loki]
+    B -. metrics / logs / traces .-> Obs
+    C -. metrics / logs / traces .-> Obs
 ```
 
 ### Current availability boundary
@@ -121,14 +136,15 @@ The database protects one payment per order and one replay identity per key/path
 ### Transactional Outbox
 
 ```mermaid
+%%{init: {"theme": "base", "themeVariables": {"background": "#FFFFFF", "primaryColor": "#0A66FF", "primaryBorderColor": "#0057B8", "primaryTextColor": "#FFFFFF", "secondaryColor": "#0B1F33", "secondaryTextColor": "#FFFFFF", "tertiaryColor": "#F4F5F7", "tertiaryTextColor": "#071B2E", "lineColor": "#0057B8"}, "flowchart": {"curve": "basis", "nodeSpacing": 32, "rankSpacing": 38}}}%%
 flowchart LR
     P[PENDING] -->|SKIP LOCKED claim| X[PROCESSING\nowner + lease]
     X -->|Kafka ACK| D[PUBLISHED]
     X -->|send failure| R[SCHEDULED RETRY]
     R -->|next_attempt_at due| P
-    X -->|lease expires| P
+    X -. lease expires .-> P
     X -->|max attempts| F[FAILED]
-    F -->|ADMIN replay| P
+    F -. ADMIN replay approval .-> P
 ```
 
 The key design property is that business state and event intent commit together in PostgreSQL. Kafka publication happens after commit, and the database persists publication ownership, retries, terminal failure, and replay eligibility.
@@ -164,7 +180,7 @@ The application tier remains a 3-replica Deployment with CPU HPA from 3 to 8 rep
 | Replacement Pod created | ~T+78s |
 | Full 3/3 capacity | ~T+94s |
 
-Automatic recovery passed. Zero-downtime hard-failure continuity did not.
+**Engineering conclusion:** automatic recovery passed. Zero-downtime hard-failure continuity did not.
 
 ## Phase 4 - PostgreSQL HA and Recovery
 
@@ -182,7 +198,7 @@ Hard primary-node loss produced:
 - 0 acknowledged commits missing from the database after failover;
 - return to 3/3 healthy instances after recovery.
 
-This is an observed RPO result scoped only to successfully acknowledged writes in the experiment.
+**Engineering conclusion:** this is an observed RPO result scoped only to successfully acknowledged writes in the experiment.
 
 ### Backup and independent restore
 
@@ -223,7 +239,7 @@ Reconciliation compared captured producer acknowledgements with records read aft
 - 6,337 records consumed from the topic;
 - 0 captured ACK values missing.
 
-Result: **observed RPO = 0 acknowledged messages lost for the captured acknowledgement set**.
+**Engineering conclusion:** **observed RPO = 0 acknowledged messages lost for the captured acknowledgement set**.
 
 ## Phase 6 - Redis Sentinel High Availability
 
@@ -242,7 +258,7 @@ During hard loss of the active master node:
 - post-failover data was present on all three Redis nodes;
 - targeted application logs showed no failover-related Redis/Lettuce error in the collected window.
 
-Redis replication is asynchronous, so the result is **not** a general zero-RPO guarantee.
+**Engineering conclusion:** failover and convergence passed for the explicitly checked data and write path. Redis replication is asynchronous, so the result is **not** a general zero-RPO guarantee.
 
 ## Phase 7 - Software Supply-Chain Security
 
@@ -293,13 +309,13 @@ SLO definitions are not presented as historical production attainment.
 
 Current regression: **146 tests passed / 0 failed / 0 errors / 0 skipped**.
 
-The last recorded JaCoCo percentage is older than the current HA/supply-chain milestone and should be treated as a historical snapshot until regenerated.
+The historical JaCoCo snapshot is **89.78% instruction / 73.63% branch coverage**. It predates the current HA and supply-chain milestone and must not be presented as release-current coverage until regenerated.
 
 Local benchmark evidence remains useful for regression and engineering comparison, not capacity planning:
 
-- Catalog read: 9,544 requests, P95 17.93ms, 0% failed.
-- High-rate soak: 5 minutes at 2,500 req/s, P95 0.84ms, P99 1.11ms, 0.07% client failures, no observed application 5xx.
-- Payment idempotency: 30 concurrent requests, one logical payment and one idempotency row.
+- Catalog read: 9,544 requests; 79.44 req/s; average 9.92ms; P95 17.93ms; P99 20.12ms; 0% failed.
+- High-rate soak: 5 minutes at 2,500 req/s; 750,000 requests; 2,499.91 req/s; P95 0.84ms; P99 1.11ms; 0.07% client failures; no observed application 5xx.
+- Payment idempotency: 30 concurrent requests; 100% HTTP success; one payment row; one idempotency row; zero duplicates.
 
 ## Release Progression
 
