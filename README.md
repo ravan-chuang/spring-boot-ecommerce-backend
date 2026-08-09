@@ -2,412 +2,263 @@
 
 [![CI](https://github.com/ravan-chuang/spring-boot-ecommerce-backend/actions/workflows/ci.yml/badge.svg)](https://github.com/ravan-chuang/spring-boot-ecommerce-backend/actions/workflows/ci.yml)
 
-A production-minded, event-driven commerce backend built with **Java 25**, **Spring Boot 4.1.0**, **PostgreSQL 17**, **Redis 7**, **Apache Kafka 4.1.2**, **Kubernetes 1.36.1**, and **Terraform on Oracle Cloud Infrastructure**.
+An evidence-led, event-driven commerce backend built with **Java 25** and **Spring Boot 4.1.0**. The project focuses on transactional correctness, idempotent commands, durable event delivery, application and stateful-service recovery, observability, software-supply-chain provenance, and brownfield Infrastructure as Code on Oracle Cloud Infrastructure.
 
-The engineering focus is end-to-end correctness and recoverability: transactional state changes, idempotent commands, durable event delivery, stateful failover, observability, software supply-chain provenance, and reproducible cloud infrastructure.
+This repository is deliberately described by evidence rather than by configuration alone. A mechanism may be implemented without being production-proven; a successful failure drill applies only to the tested failure domain; and zero-loss observations apply only to the captured acknowledgement set that was reconciled against durable state.
 
-> **Current repository state - verified 2026-08-10**
-> `main`: **`67d2cf9`**
-> Phase 8 tag: **`phase8-oci-iac`** -> **`ed626cb`**
-> Final main workflows: **CI PASS · CodeQL PASS · Supply Chain Security PASS**
+> **Verified repository baseline — 2026-08-10**
+>
+> - `main` and `origin/main`: **`67d2cf9`**
+> - Phase 8 OCI milestone: **`phase8-oci-iac` → `ed626cb`**
+> - Phase 8 final documentation: **`phase8-docs-final` → `929bee0`**
+> - Independent clean-clone run: **146 tests passed, 0 failed, 0 errors, 0 skipped**
+> - Current JaCoCo: **89.54% instruction / 73.63% branch**, 111 analyzed classes
+> - Latest-main documentation records: **CI PASS · CodeQL PASS · Supply Chain Security PASS**
 
-The repository currently verifies:
+The inspected source, configuration, infrastructure, and verification paths match `main`. README, engineering-summary, and portfolio files were active documentation edits in the inspected working tree and are not represented as a completely clean repository state.
 
-- a **3-replica Spring Boot application tier** with HPA and Kubernetes recovery controls;
-- **CloudNativePG PostgreSQL HA**, synchronous failover, WAL archiving, physical backup, and independent restore;
-- **3-node Kafka KRaft** with broker failure and acknowledgement-to-record reconciliation;
-- **Redis replication + Sentinel** with automatic master failover;
-- **SBOM, Trivy, immutable GHCR digest, Cosign OIDC signing, image SBOM, and provenance attestation**;
-- **OCI brownfield Infrastructure as Code**, where existing network and compute resources were adopted into Terraform and reconciled to **zero drift**;
-- verified **SSH, Oracle Cloud Agent, OCI Run Command, IAM dynamic-group policy, and controlled reboot recovery**.
+## What is verified
 
-The claim boundary is equally important: this is **not yet production-proven multi-zone HA**. The local kind control-plane, local stateful storage/object-store failure domains, external secrets/workload identity, production traffic, historical SLO/RPO/RTO attainment, and managed multi-zone application delivery are not claimed.
+- Three Spring Boot replicas with HPA, PDB, probes, topology spread, and worker-recovery controls.
+- Transactional commerce invariants, payment idempotency, Transactional Outbox, idempotent Kafka consumers, and persisted DLT governance.
+- CloudNativePG PostgreSQL 17 failover, acknowledgement reconciliation, physical backup, and independent restore.
+- Three-node Kafka 4.1.2 KRaft behavior under one broker/node loss.
+- Redis 7 replication and Sentinel promotion under active-master loss.
+- Prometheus/Grafana metrics, OpenTelemetry/Tempo traces, Alloy/Loki logs, Alertmanager rules, and operational playbooks.
+- CycloneDX SBOMs, Trivy gates, immutable GHCR digests, Cosign OIDC signing, image SBOM, and provenance.
+- OCI brownfield Terraform adoption with a final `No changes` plan, plus SSH, Cloud Agent, Run Command, IAM, and controlled-reboot recovery.
 
----
+## What is not claimed
 
-## Engineering Baseline
-
-| Area | Current verified state |
-|---|---|
-| Main | `67d2cf9` |
-| Phase 8 milestone | `phase8-oci-iac` -> `ed626cb` |
-| Automated regression | **146 passed / 0 failed / 0 errors / 0 skipped** |
-| Application | 3 replicas; HPA 3-8 |
-| Kubernetes | kind v1.36.1; 1 control-plane + 3 workers |
-| PostgreSQL | PostgreSQL 17; CloudNativePG x3 |
-| Kafka | Kafka 4.1.2; KRaft x3 |
-| Redis | 3 data nodes + 3 Sentinels |
-| Flyway | V1-V11 validated |
-| Supply chain | CycloneDX + Trivy + GHCR + Cosign OIDC + provenance |
-| OCI | Tokyo-region dev VM + adopted network resources |
-| Terraform | `fmt` PASS · `validate` PASS · final plan **No changes** |
-| GitHub Actions | CI PASS · CodeQL PASS · Supply Chain Security PASS |
-| Dependabot | 0 open Dependabot PRs at final verification |
-
-> **Coverage note:** the historical JaCoCo snapshot is **89.78% instruction / 73.63% branch**. It predates later HA, supply-chain, and Phase 8 work and is not presented as release-current coverage.
+- A production multi-zone application or data platform.
+- Zero-downtime continuity during abrupt worker loss.
+- Universal zero-RPO behavior across PostgreSQL, Kafka, or Redis.
+- Historical production SLO or error-budget attainment.
+- Managed secrets/workload identity, admission-time signature enforcement, or production payment-provider ownership.
+- Proof that the full local Kubernetes and stateful stack is deployed on the OCI Phase 8 VM.
 
 ---
 
-## System Architecture
+## Current engineering baseline
 
-### Runtime Deployment View
+| Domain | As-built or observed state | Evidence boundary |
+|---|---|---|
+| Repository baseline | Phase 8 docs `929bee0`; OCI milestone `ed626cb` | `phase8-docs-final` and `phase8-oci-iac` preserve the two verified milestones |
+| Build and tests | 146 passed / 0 failed / 0 errors / 0 skipped | Independent clean-clone `./mvnw clean verify` |
+| Coverage | 89.54% instruction / 73.63% branch; 111 classes | Current rerun, distinct from historical coverage and the CI floor |
+| Application | 3 replicas; HPA 3–8; PDB; probes; topology spread | Local kind; one control-plane |
+| PostgreSQL | 16 in Compose/Testcontainers; 17 in CloudNativePG ×3 | HA/restore evidence applies to CloudNativePG PostgreSQL 17 |
+| Kafka | 4.1.0 in Testcontainers; 4.1.2 in Compose/Kubernetes; KRaft ×3 drill | Version scopes are not interchangeable |
+| Redis | Redis 7; 3 data nodes + 3 Sentinels in HA drill | Asynchronous replication |
+| Schema | Flyway V1–V11; `ddl-auto=validate`; Open Session in View disabled | Repository-backed migrations |
+| Supply chain | CycloneDX, Trivy, GHCR digest, Cosign OIDC, image SBOM, provenance | No cluster admission enforcement |
+| OCI / Terraform | VCN, subnet, IGW, route, security objects, NSGs, rules, and VM adopted | Single development VM, not the full runtime stack |
 
-```mermaid
-flowchart TB
-    Client["Client / API Consumer"]
+### Coverage precision
 
-    subgraph K8s["Local Kubernetes Runtime - kind"]
-        Service["Kubernetes Service"]
-        App["Spring Boot x3<br/>REST · Security · Session<br/>Outbox · Kafka Consumers<br/>HPA 3-8 · PDB"]
+| Coverage fact | Instruction | Branch | Meaning |
+|---|---:|---:|---|
+| Current clean verification | **89.54%** | **73.63%** | Release-current rerun used here |
+| Historical Phase 2.1 snapshot | 89.78% | 73.63% | Earlier evidence; not labeled current |
+| CI regression floor | 81.4756% | 68.2927% | Baseline gate with maximum drop `0.005` |
 
-        PG[("PostgreSQL 17<br/>CloudNativePG x3")]
-        Redis[("Redis 7<br/>1 Master + 2 Replicas<br/>3 Sentinels")]
-        Kafka["Kafka 4.1.2<br/>KRaft x3"]
-        Backup["WAL Archive + Physical Backup<br/>Independent Restore"]
-        Obs["Prometheus · Grafana<br/>Tempo · Loki"]
-    end
+---
 
-    Client -->|HTTP| Service --> App
-    App -->|Transactional JDBC| PG
-    App -->|Session / Cache| Redis
-    App <-->|Publish / Consume| Kafka
-    App -.->|Metrics · Logs · Traces| Obs
-    PG -->|Archive / Restore| Backup
-
-    classDef app fill:#eef5ff,stroke:#2563eb,stroke-width:2px,color:#0f172a;
-    classDef state fill:#f8fafc,stroke:#475569,stroke-width:1.5px,color:#0f172a;
-    classDef recover fill:#ecfdf5,stroke:#059669,stroke-width:2px,color:#064e3b;
-    class Service,App app;
-    class PG,Redis,Kafka,Obs state;
-    class Backup recover;
-```
-
-### OCI / Terraform View
+## As-built architecture
 
 ```mermaid
 flowchart LR
-    Repo["Git<br/>Terraform Config"]
-    TF["Terraform / OCI CLI"]
-    State["Local Terraform State<br/>Ignored from Git"]
+    Client["Client / API consumer"] -->|HTTP| Service["Kubernetes Service"]
 
-    subgraph OCI["OCI - Japan East (Tokyo)"]
-        VCN["VCN"]
-        Subnet["Public Subnet"]
-        IGW["Internet Gateway"]
-        NSG["Route / Security / NSG"]
-        VM["Oracle Linux VM<br/>opc SSH"]
-        Agent["Oracle Cloud Agent<br/>Run Command"]
+    subgraph Runtime["Local kind runtime"]
+        Service --> App["Spring Boot ×3<br/>REST · security · Outbox · consumers<br/>HPA 3–8 · PDB"]
+        App -->|transactional JDBC| PG[("PostgreSQL 17<br/>CloudNativePG ×3")]
+        App -->|session / cache| Redis[("Redis 7<br/>1 master + 2 replicas<br/>3 Sentinels")]
+        App -->|publish after commit| Kafka["Kafka 4.1.2<br/>KRaft ×3 · RF=3 · min ISR=2"]
+        Kafka -->|at-least-once delivery| App
+        App -.->|metrics · logs · traces| Obs["Prometheus · Grafana · Tempo<br/>Loki · Alloy · Alertmanager"]
     end
 
-    Repo --> TF
-    State <--> TF
-    TF -->|Import / Refresh / Plan| VCN
-    VCN --> Subnet
-    VCN --> IGW
-    Subnet --> NSG --> VM --> Agent
+    Supply["Supply-chain pipeline<br/>SBOM · Trivy · digest · signing · provenance"] -.->|signed digest| App
+    OCI["OCI Phase 8 development boundary<br/>Terraform adoption · zero drift<br/>SSH · Agent · Run Command · reboot recovery"]
 
-    classDef control fill:#eef5ff,stroke:#2563eb,stroke-width:2px,color:#0f172a;
-    classDef cloud fill:#f8fafc,stroke:#475569,stroke-width:1.5px,color:#0f172a;
-    classDef ok fill:#ecfdf5,stroke:#059669,stroke-width:2px,color:#064e3b;
-    class Repo,TF,State control;
-    class VCN,Subnet,IGW,NSG cloud;
-    class VM,Agent ok;
+    classDef runtime fill:#eaf2f8,stroke:#2e74b5,color:#0b2545;
+    classDef data fill:#edf7ef,stroke:#2e7d32,color:#1f2d3d;
+    classDef control fill:#f5f8fb,stroke:#6b7c8f,color:#1f2d3d,stroke-dasharray:6 4;
+    class App,Service runtime;
+    class PG,Redis data;
+    class Supply,OCI,Obs control;
 ```
 
----
+The architectural correctness boundary is the PostgreSQL commit. Business state and outbound event intent become durable together; Kafka publication occurs after commit. Redis improves cache/session behavior but is not the source of record. Kafka remains at-least-once, so consumer-side idempotency is an explicit requirement.
 
-## Engineering Highlights
-
-- Payment idempotency using **SHA-256 request fingerprints**, PostgreSQL uniqueness, pessimistic order locking, persisted replay metadata, and response snapshots.
-- Transactional Outbox using **`FOR UPDATE SKIP LOCKED`**, processing ownership, leases, retry scheduling, terminal failure, and controlled replay.
-- Idempotent Kafka consumers with transactionally persisted deduplication markers.
-- Persisted DLT governance with quarantine, replay reservation, audit history, and lease recovery.
-- Correlation propagation across HTTP, MDC, PostgreSQL, Outbox, Kafka, consumers, DLT, logs, and traces.
-- Prometheus, Grafana, Tempo, Loki, Alloy, Alertmanager, SLO rules, and runbooks.
-- Flyway **V1-V11** with Hibernate schema validation.
-- Kubernetes HPA path verified: **3 -> 6 -> 8 -> 6 -> 4 -> 3**.
-- Multi-replica Outbox drill: **90 events, 30/30/30 claims, 90 Kafka records, no observed duplicate/missing records**.
-- Hard worker loss: application returned to **3/3 Ready ~T+94s**; transient transport failures were preserved as a negative finding.
-- PostgreSQL primary failure: client-visible write **RTO 51.543s** with **0 captured acknowledged writes missing** after failover.
-- PostgreSQL restore: **3,864 probe rows** recovered; independent local restore cluster healthy in approximately **49s**.
-- Kafka broker/node failure: **3,733 captured ACK values**, **0 missing** after recovery; all 6 partitions returned to ISR=3.
-- Redis Sentinel failover: new master observed approximately **T+18s**; checked data survived and post-promotion writes succeeded.
-- Supply-chain pipeline: application SBOM, Trivy gates, immutable image digest, Cosign OIDC signing, image SBOM, provenance attestation.
-- Phase 8 OCI: existing cloud resources adopted into Terraform with final **zero-drift** plan.
-- OCI Run Command: final smoke test **ACKED / SUCCEEDED / exit 0**.
-- Controlled OCI restart restored SSH and cloud-agent operation; final guest health verified.
+The supply-chain and OCI paths are separate control boundaries. No deployment edge is claimed from OCI to the full local Kubernetes/stateful runtime.
 
 ---
 
-## Technology Stack
-
-| Area | Technologies / mechanisms |
-|---|---|
-| Language / framework | Java 25, Spring Boot 4.1.0 |
-| API / security | Spring MVC, Spring Security, JWT, opaque refresh tokens, OpenAPI |
-| Persistence | PostgreSQL 17, CloudNativePG, JPA, Hibernate, Flyway |
-| Cache | Redis 7 replication + Sentinel |
-| Messaging | Kafka 4.1.2, KRaft, Spring Kafka |
-| Reliability | Transactional Outbox, leases, retry scheduling, idempotent consumers, persisted DLT |
-| Observability | Actuator, Micrometer, OpenTelemetry, Prometheus, Grafana, Tempo, Loki, Alloy, Alertmanager |
-| Testing | JUnit, MockMvc, Testcontainers, concurrency and failure drills |
-| Containers | Docker, Docker Compose |
-| Orchestration | Kubernetes, HPA, PDB, probes, topology spread |
-| Local platform | kind 1 control-plane + 3 workers |
-| Cloud / IaC | OCI, Terraform, OCI CLI |
-| Supply chain | GitHub Actions, CodeQL, CycloneDX, Trivy, GHCR, Cosign, OIDC, provenance |
-
----
-
-## Transaction Correctness
+## Transaction correctness
 
 ### Commerce invariants
 
-- Product reads use Redis with explicit mutation eviction.
-- Product stock uses optimistic locking via JPA `@Version`.
-- Cart is not inventory reservation; checkout revalidates stock inside the transaction.
-- Order-item snapshots preserve purchase-time name, unit price, and subtotal.
+- Product stock uses optimistic locking through JPA `@Version`.
+- Cart contents are not inventory reservations; checkout revalidates stock inside the order transaction.
+- Order-item snapshots preserve purchase-time name, price, and subtotal.
 - Order creation, stock deduction, cart deletion, and `ORDER_CREATED` Outbox insertion commit atomically.
-- Payment and cancellation serialize terminal transitions through the same pessimistic order lock.
+- Payment and cancellation serialize terminal order transitions through the same pessimistic order lock.
 
 ### Payment idempotency
 
 ```text
 Idempotency-Key + request path
--> SHA-256 request fingerprint
--> SELECT order FOR UPDATE
--> replay lookup under lock
--> validate PENDING + no payment
--> persist payment + replay metadata + response snapshot
--> order = PAID
--> persist PAYMENT_PAID Outbox event
--> one PostgreSQL commit
+→ normalized key + SHA-256 request fingerprint
+→ SELECT order FOR UPDATE
+→ replay lookup under lock
+→ validate PENDING and no existing payment
+→ persist payment + replay metadata + response snapshot
+→ order = PAID + PAYMENT_PAID Outbox event
+→ one PostgreSQL commit
 ```
 
----
+Database constraints enforce one payment per order and one replay identity per `(idempotency_key, request_path)`. Reusing a key with a different request fingerprint is rejected.
 
-## Transactional Outbox
+### Transactional Outbox
 
 ```mermaid
 stateDiagram-v2
     [*] --> PENDING
-    PENDING --> PROCESSING: SKIP LOCKED claim
+    PENDING --> PROCESSING: FOR UPDATE SKIP LOCKED
     PROCESSING --> PUBLISHED: Kafka ACK
-    PROCESSING --> PENDING: retry / lease recovery
+    PROCESSING --> PENDING: retry or lease expiry
     PROCESSING --> FAILED: attempts exhausted
     FAILED --> PENDING: approved ADMIN replay
     PUBLISHED --> [*]
 ```
 
-Business state and event intent commit together in PostgreSQL. Kafka publication occurs after commit, while ownership, retry timing, terminal failure, and replay eligibility remain durable database state.
+An executed three-replica drill produced **90 events**, distributed claims **30/30/30**, **90 PUBLISHED database rows**, and **90 valid unique Kafka sequences**, with **0 duplicate, missing, or unexpected values**. This is workload-scoped evidence, not a global exactly-once claim.
+
+Consumers persist `(event_id, consumer_name)` with the business side effect in the same transaction. Persisted DLT governance covers quarantine, replay reservation, audit history, original destination, and lease recovery.
 
 ---
 
-## Kubernetes Failure Evidence
+## Kubernetes and stateful reliability evidence
 
-| Observation | Result |
-|---|---:|
-| Total hard-worker-loss trace attempts | 458 |
-| HTTP 200 | 424 |
-| Transport failures | 34 |
-| Application HTTP 5xx | 0 |
-| Last transport failure | ~T+40s |
-| Replacement Pod created | ~T+78s |
-| Full 3/3 capacity | ~T+94s |
+| Subsystem | Injected fault or workload | Observed result | Honest boundary |
+|---|---|---|---|
+| Application | Abrupt worker stop; 458 client traces | 424 HTTP 200; 34 transport failures; 0 app 5xx; 3/3 Ready around T+94s | Self-healing passed; zero-downtime did not |
+| PostgreSQL | CloudNativePG primary hard loss | Client-visible write RTO 51.543s; 72 captured ACK commits; 0 missing | RPO=0 only for the captured ACK set |
+| PostgreSQL restore | Independent physical restore | 3,864 probe rows; restore cluster healthy in about 49s | Local restore domain; no multi-zone DR proof |
+| Kafka | One KRaft broker/node loss | 3,733 captured ACK values; 0 missing; 6,337 consumed; all 6 partitions returned to ISR=3 | One-node experiment; not universal zero-loss |
+| Redis | Active-master hard loss | New master around T+18s; checked data readable; post-promotion writes succeeded | Async replication; no general zero-RPO claim |
 
-**Conclusion:** self-healing passed; zero-downtime hard-failure continuity did not.
+Node detection, replacement creation, Pod readiness, EndpointSlice convergence, client-visible recovery, and durable-state reconciliation are different measurements. The project does not collapse them into one misleading MTTR number.
 
----
+### Kubernetes controls
 
-## PostgreSQL HA / DR
-
-### Primary failover
-
-- CloudNativePG, 3 PostgreSQL 17 instances.
-- synchronous commit with one-standby acknowledgement.
-- `postgres-ha-1` primary lost.
-- `postgres-ha-2` promoted.
-- client-visible write RTO: **51.543s**.
-- captured acknowledged commits: 72.
-- missing captured acknowledged writes: **0**.
-- final cluster: 3/3 healthy.
-
-### Backup / restore
-
-- continuous WAL archiving.
-- physical base backup.
-- S3-compatible MinIO catalog.
-- independent restore cluster.
-- restored probe table: **3,864 rows**.
-- local restore cluster healthy in approximately **49s**.
-
-The result is local recovery evidence, not multi-zone DR proof.
+- 3 baseline replicas.
+- HPA min 3 / max 8; average CPU target 60%.
+- PDB `minAvailable: 2`.
+- Rolling update `maxUnavailable: 0`, `maxSurge: 1`.
+- Startup, readiness, and liveness probes.
+- Topology spread `maxSkew: 1` and preferred anti-affinity.
+- 30-second NotReady/Unreachable `NoExecute` tolerations used by the local failure experiment.
 
 ---
 
-## Kafka KRaft HA
-
-Validation topic:
-
-- 6 partitions.
-- RF=3.
-- `min.insync.replicas=2`.
-
-During one broker/node loss, quorum survived, leaders moved, ISR degraded to 2 where affected, producer metadata retry recovered publication, and all partitions returned to ISR=3.
-
-| Reconciliation evidence | Result |
-|---|---:|
-| Captured ACK records | 3,733 |
-| Unique captured ACK values | 3,733 |
-| Records consumed after recovery | 6,337 |
-| Captured ACK values missing | **0** |
-
-Observed RPO = 0 applies only to the captured acknowledgement set.
-
----
-
-## Redis Sentinel HA
-
-- 3 Redis data nodes.
-- 1 master + 2 replicas.
-- 3 Sentinels; quorum 2.
-- Spring Boot/Lettuce uses Sentinel discovery.
-- hard active-master loss.
-- new master observed approximately **T+18s**.
-- checked pre-failure data remained readable.
-- post-promotion writes succeeded.
-- former master rejoined as replica.
-- final topology returned to 1 master + 2 replicas.
-
-Redis replication is asynchronous; no general zero-RPO claim is made.
-
----
-
-## Software Supply-Chain Security
+## Software supply chain
 
 ```mermaid
 flowchart LR
-    Source["Commit / PR"] --> Tests["Tests"]
-    Tests --> SBOM["CycloneDX SBOM"]
-    SBOM --> Scan["Trivy Gates"]
-    Scan --> Build["Image Build"]
-    Build --> Digest["GHCR Digest"]
-    Digest --> Sign["Cosign OIDC"]
-    Sign --> Provenance["Image SBOM + Provenance"]
-    Provenance --> Promote["Digest-pinned Promotion"]
-
-    classDef ok fill:#ecfdf5,stroke:#059669,stroke-width:2px,color:#064e3b;
-    classDef gate fill:#fff7ed,stroke:#d97706,stroke-width:2px,color:#7c2d12;
-    class Tests,SBOM,Digest,Sign,Provenance,Promote ok;
-    class Scan gate;
+    Source["Source + tests"] --> AppSBOM["CycloneDX app SBOM"]
+    AppSBOM --> FSGate["Trivy filesystem gate"]
+    FSGate --> Image["Immutable GHCR digest"]
+    Image --> ImageGate["Trivy image gate"]
+    ImageGate --> Sign["Cosign keyless signing<br/>GitHub OIDC"]
+    Sign --> Evidence["Image SBOM + provenance"]
+    Evidence --> Promote["Digest-pinned promotion input"]
 ```
 
-The latest post-merge Supply Chain Security workflow completed successfully, including test execution, application SBOM, filesystem scanning, immutable image build/push, Cosign OIDC signing, image SBOM, provenance attestation, and evidence upload.
+Trivy filesystem and image gates fail on HIGH/CRITICAL findings. The repository also creates application and image SBOMs, publishes immutable image identity, signs with GitHub OIDC, and records provenance.
 
-**Boundary:** no Kubernetes admission rejection of unsigned images or runtime signature enforcement yet.
+**Open enforcement point:** signed artifacts can be produced, but unsigned or unverified digests are not yet rejected at Kubernetes admission time.
 
 ---
 
-## Phase 8 - OCI Brownfield IaC
+## OCI brownfield Infrastructure as Code
 
-Phase 8 adopted the already-running OCI dev environment into Terraform instead of replacing it.
+Phase 8 adopted the already-running development environment instead of replacing it. Terraform represents the VCN, public subnet, internet gateway, route table, default security list, two NSGs, NSG rules, and the compute instance. Adopted resources use `prevent_destroy` safeguards.
 
-### Adopted resources
+Verified operational paths include:
 
-- VCN.
-- public subnet.
-- internet gateway.
-- route table.
-- default security list.
-- two NSGs.
-- NSG security rules.
-- compute instance.
+- `VM.Standard.E2.1.Micro` Oracle Linux development VM in Tokyo.
+- SSH public-key authentication as `opc`.
+- Oracle Cloud Agent and Run Command plugin health.
+- Dynamic Group/IAM authorization for Run Command.
+- Final Run Command `ACKED / SUCCEEDED / exit 0`.
+- Controlled restart followed by SSH, agent, CPU, memory, disk, and guest-health checks.
+- `terraform fmt -check`, `terraform validate`, and final plan **`No changes`**.
 
-### Operational verification
+Terraform state and credentials are ignored from Git, but state is still local. Remote encrypted state, locking, backup, and plan review are required before team or production use.
 
-- instance `RUNNING`.
-- TCP/22 reachable.
-- OpenSSH banner verified.
-- public-key SSH authentication verified with user `opc`.
-- `sshd` active.
-- Oracle Cloud Agent active.
-- Run Command plugin active.
-- IAM dynamic group and policy configured.
-- final Run Command: **ACKED / SUCCEEDED / exit code 0**.
-- controlled restart recovery completed.
-- guest CPU, memory, disk, SSH and cloud-agent health checked.
+### Network hardening finding
 
-### Terraform verification
+Current Terraform rules allow `0.0.0.0/0` ingress to TCP **22, 80, 443, and 8080**. This is a development-only exposure. Production evolution should close direct 8080 access, restrict SSH, and route public traffic through controlled TLS/load-balancer/WAF paths.
 
-```text
-terraform fmt -check     PASS
-terraform validate       PASS
-terraform plan           No changes
+---
+
+## Performance and evidence quality
+
+| Profile | Recorded result | Evidence quality | Claim boundary |
+|---|---|---|---|
+| Current Maven verification | 146/0/0/0; 49.896s; 111 classes | Direct clean-clone rerun | Automated verification, not runtime capacity |
+| Catalog read baseline | 9,544 requests; 79.44 req/s; avg 9.92ms; P95 17.93ms; P99 20.12ms; 0% failed | Saved `reports/performance-baseline.md` | Local Docker Compose; 300ms think time |
+| High-rate catalog soak | 5m @ 2,500 req/s; 750,000 requests; P95 0.84ms; P99 1.11ms; 0.07% client failures; no observed app 5xx | Documented result; raw k6 summary not retained | Not production capacity or an SLA |
+| Payment idempotency drill | 30 concurrent requests; 100% HTTP success; 1 payment row; 1 idempotency row; 0 duplicates | Documented k6 result; automated suite separately tests 8-way concurrency | Local deduplication evidence |
+
+The workload scripts remain useful for reproduction, but a script definition is not the same as a preserved result artifact.
+
+---
+
+## Local verification
+
+Run the current automated verification from a clean clone with a working Docker environment:
+
+```bash
+./mvnw clean verify
 ```
 
-Terraform state and private credentials are not tracked in Git. The provider lock file is committed.
+The test suite uses Testcontainers and therefore requires access to a compatible container runtime. Review generated JaCoCo output under `target/site/jacoco/` after the run.
+
+Important evidence locations include:
+
+- `verification/phase21_reliability_verification.md`
+- `verification/phase3/`
+- `verification/phase4/`
+- `verification/phase5/message_reconciliation.txt`
+- `verification/phase6/redis_ha_failover_verification.md`
+- `verification/phase7/software_supply_chain_security.md`
+- `verification/phase8/`
+- `reports/performance-baseline.md`
+- `infra/terraform/oci/`
 
 ---
 
-## Testing and Local Performance
+## Prioritized next engineering sequence
 
-Current cited regression: **146 passed / 0 failed / 0 errors / 0 skipped**.
+| Priority | Boundary | Required next evidence |
+|---|---|---|
+| P0 | External secrets + workload identity | Remove environment/local-secret dependence; verify rotation and policy |
+| P0 | OCI public exposure | Close direct 8080; restrict SSH; place TLS/LB/WAF at the edge |
+| P0 | Local Terraform state | Remote encrypted state, locking, backup, and reviewed plans |
+| P1 | Managed multi-zone runtime | Deploy across real application and data failure domains |
+| P1 | Signed-image admission | Reject unsigned/unverified digests at cluster entry |
+| P1 | External SLI/SLO operation | Synthetic availability/latency, error budgets, and incident cadence |
+| P1 | Payment-provider ownership | Sandbox adapter, signed webhooks, reconciliation, provider idempotency |
+| P1 | Production endpoints | Explicitly disable or protect SpringDoc UI/API docs in production |
+| P2 | Workload depth | Write/event-heavy soak, retry storms, saturation, and correlated failures |
+| P2 | Recovery distributions | Repeated RPO/RTO and restore drills rather than one-off observations |
 
-| Profile | Evidence |
-|---|---|
-| Catalog read | 9,544 requests; 79.44 req/s; avg 9.92 ms; P95 17.93 ms; P99 20.12 ms; 0% failed |
-| High-rate soak | 5 min @ 2,500 req/s; 750,000 requests; 2,499.91 req/s; P95 0.84 ms; P99 1.11 ms; 0.07% client failures; no observed app 5xx |
-| Payment idempotency | 30 concurrent requests; 100% HTTP success; 1 payment row; 1 idempotency row; 0 duplicates |
+## Engineering position
 
-These are reproducible **local** profiles, not production capacity or SLA guarantees.
+The project is best described as an **advanced student / strong junior backend-platform portfolio**, with selected **early mid-level reasoning** in transaction boundaries, durable state machines, failure reconciliation, restore validation, negative-result preservation, supply-chain provenance, and brownfield IaC.
 
----
-
-## Milestone History
-
-| Milestone | Scope |
-|---|---|
-| `v1.1.0-phase1-hardening` | application hardening |
-| `v1.2.0-phase2-observability` | observability |
-| `v1.3.0-phase21-reliability` | reliability controls |
-| `v1.4.0-phase3-kubernetes` | Kubernetes multi-replica baseline |
-| `v1.5.0-phase33-multinode-ha` | application worker recovery |
-| `v1.6.0-phase4-postgresql-dr` | PostgreSQL HA + restore |
-| `v1.7.0-phase5-kafka-ha` | Kafka KRaft HA |
-| `v1.8.0-phase6-redis-ha` | Redis Sentinel HA |
-| `v1.9.0-phase7-supply-chain` | software supply-chain security |
-| `phase8-oci-iac` | OCI brownfield Terraform adoption |
-
----
-
-## Remaining Production Boundaries
-
-Highest-priority next work:
-
-1. **Remote Terraform state + locking** before team or production IaC use.
-2. **External secrets + workload identity** and rotation policy.
-3. **Managed multi-zone cloud application deployment** rather than only a standalone OCI dev VM.
-4. **TLS, load balancer/ingress, DNS, and external synthetic SLI**.
-5. **Off-host production backup policy** and repeated RPO/RTO drills.
-6. **Signed-image admission enforcement**.
-7. **Real payment-provider sandbox** with signed webhooks and reconciliation.
-8. **Write/event-heavy soak tests and correlated failure drills**.
-9. **Regenerate release-current coverage**.
-10. Upgrade remaining GitHub Docker actions that still target the deprecated Node.js 20 action runtime.
-
----
-
-## Engineering Assessment
-
-Under strict industry review, this repository is best described as **advanced student / strong junior backend-platform engineering evidence**, with **early mid-level reasoning** in selected areas:
-
-- transaction and idempotency boundaries;
-- durable event state machines;
-- distributed failure analysis;
-- acknowledgement-to-durable-state reconciliation;
-- restore-based DR validation;
-- negative-result preservation;
-- supply-chain provenance;
-- brownfield Terraform adoption and zero-drift reconciliation.
-
-It is **not** equivalent to production-proven senior engineering. The remaining gap is primarily real production ownership: managed failure domains, identity/secrets, live traffic and incidents, SLO/error-budget history, cost controls, and external integration ownership.
+Its strongest professional characteristic is the discipline of separating implemented mechanisms, executed observations, current limitations, and proposed next architecture. It should not be represented as production-proven senior engineering until real multi-zone operation, identity/secrets, live traffic and incidents, SLO/error-budget history, cost ownership, and third-party integration responsibility are evidenced.
