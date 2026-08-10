@@ -8,14 +8,14 @@ This repository is deliberately described by evidence rather than by configurati
 
 > **Verified repository baseline — 2026-08-10**
 >
-> - `main` and `origin/main`: **`ff5e527`**
+> - Verified source baseline: **`ff5e527`**
 > - Immutable milestones: **`phase8-docs-final` → `929bee0`**; **`phase8-oci-iac` → `ed626cb`**
 > - Independent clean-clone run: **172 tests passed, 0 failed, 0 errors, 0 skipped**
 > - Current JaCoCo: **92.55% instruction / 82.75% branch**, 112 analyzed classes
 > - Maven JaCoCo gate: **85% instruction / 75% branch — PASS**
 > - Latest-main documentation records: **CI PASS · CodeQL PASS · Supply Chain Security PASS**
 
-The verification clone was clean and resolved exactly to `ff5e527261fd3ccdf3098151375c13264f5afef2`. The test and coverage figures above were regenerated from that commit with a working Docker environment; they are not copied from an older documentation snapshot.
+The verification clone was clean and resolved exactly to source baseline `ff5e527261fd3ccdf3098151375c13264f5afef2`. The test and coverage figures above were regenerated from that commit with a working Docker environment; they are not copied from an older documentation snapshot.
 
 ## What is verified
 
@@ -43,7 +43,7 @@ The verification clone was clean and resolved exactly to `ff5e527261fd3ccdf30981
 
 | Domain | As-built or observed state | Evidence boundary |
 |---|---|---|
-| Repository | `main = origin/main = ff5e527`; docs tag `929bee0`; OCI tag `ed626cb` | Clean verification clone at the full current SHA |
+| Repository | verified source baseline `ff5e527`; docs tag `929bee0`; OCI tag `ed626cb` | Clean verification clone at the exact verified source SHA |
 | Build and tests | 172 passed / 0 failed / 0 errors / 0 skipped | Independent clean-clone `./mvnw clean verify` |
 | Coverage | 92.55% instruction / 82.75% branch; 112 classes | Current rerun, distinct from historical coverage and both gate definitions |
 | Application | 3 replicas; HPA 3–8; PDB; probes; topology spread | Local kind; one control-plane |
