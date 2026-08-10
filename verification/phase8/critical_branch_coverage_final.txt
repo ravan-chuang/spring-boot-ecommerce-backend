@@ -1,0 +1,7 @@
+Tests: 171 passed, 0 failed, 0 errors, 0 skipped
+
+INSTRUCTION   90.43% covered=7774 missed=823 total=8597
+BRANCH        80.48% covered=235 missed=57 total=292
+LINE          90.17% covered=2147 missed=234 total=2381
+METHOD        88.78% covered=625 missed=79 total=704
+CLASS         97.30% covered=108 missed=3 total=111
