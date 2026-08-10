@@ -1,10 +1,9 @@
 # Spring Boot E-Commerce Backend — System Architecture & Engineering Summary
 
-> **Evidence-led engineering review**
-> Verification date: **2026-08-10**
-> Phase 8 documentation baseline: **`929bee0`**
-> Phase 8 OCI milestone: **`phase8-oci-iac` → `ed626cb`**
-> Phase 8 final documentation: **`phase8-docs-final` → `929bee0`**
+> **Evidence-led engineering review**  
+> Verification date: **2026-08-10**  
+> Current `main`: **`ff5e527`**  
+> Immutable milestones: **`phase8-docs-final` → `929bee0`**; **`phase8-oci-iac` → `ed626cb`**
 
 ## Executive position
 
@@ -34,13 +33,14 @@ An independent clean clone of `main` completed:
 ```text
 ./mvnw clean verify
 
-Tests:      146 passed / 0 failed / 0 errors / 0 skipped
-Build time: 49.896 s
-JaCoCo:     89.54% instruction / 73.63% branch
-Classes:    111 analyzed
+Tests:      172 passed / 0 failed / 0 errors / 0 skipped
+Build time: 49.278 s
+JaCoCo:     92.55% instruction / 82.75% branch
+Classes:    112 analyzed
+Hard gate:  85% instruction / 75% branch — PASS
 ```
 
-The Phase 8 documentation baseline is preserved by `phase8-docs-final` at `929bee0`, while the OCI infrastructure milestone is preserved by `phase8-oci-iac` at `ed626cb`. These immutable tags are used as the evidence baselines instead of hard-coding a moving `main` HEAD into the document.
+`HEAD` and `origin/main` both resolved to `ff5e527261fd3ccdf3098151375c13264f5afef2`. The verification clone was clean, and the figures above were regenerated from that exact commit with Docker-backed Testcontainers.
 
 ### 1.2 Version scope
 
@@ -58,9 +58,10 @@ The Phase 8 documentation baseline is preserved by `phase8-docs-final` at `929be
 
 | Coverage fact | Instruction | Branch | Allowed wording |
 |---|---:|---:|---|
-| Current clean verification | **89.54%** | **73.63%** | Current rerun used in this document |
+| Current clean verification | **92.55%** | **82.75%** | Current rerun used in this document |
 | Historical Phase 2.1 snapshot | 89.78% | 73.63% | Historical evidence only |
-| CI regression floor | 81.4756% | 68.2927% | Minimum baseline; maximum allowed drop `0.005` |
+| Maven hard gate | 85.00% | 75.00% | Bundle minimum enforced during `verify`; current run passed |
+| Regression reference | 81.4756% | 68.2927% | Secondary baseline script; maximum absolute drop `0.005` |
 
 These are three different facts. The historical snapshot and CI threshold are not substituted for release-current coverage.
 
@@ -137,6 +138,8 @@ The software-supply-chain and OCI paths are intentionally separate control bound
 - Order-item snapshots preserve purchase-time name, price, and subtotal.
 - Order creation, stock deduction, cart deletion, and `ORDER_CREATED` Outbox insertion commit atomically.
 - Payment and cancellation serialize terminal order transitions through the same pessimistic order lock.
+- The public `/api/users/{userId}/orders/slow` endpoint and duplicated `createOrderFromCartSlow` workflow were removed from production code.
+- `src/main/java` contains no `Thread.sleep`; timing control is isolated behind `OrderProcessingDelay`, with `NoOpOrderProcessingDelay` used in production and a mock used by tests.
 
 ### 4.2 Payment idempotency
 
@@ -357,7 +360,7 @@ Phase 8 proves infrastructure adoption and the VM management path. It does not p
 
 | Profile | Recorded result | Evidence quality | Boundary |
 |---|---|---|---|
-| Current Maven verification | 146/0/0/0; 49.896s; 111 classes | Direct clean-clone rerun | Not runtime-capacity evidence |
+| Current Maven verification | 172/0/0/0; 49.278s; 112 classes | Direct clean-clone rerun at `ff5e527` | Not runtime-capacity evidence |
 | Catalog read baseline | 9,544 requests; 79.44 req/s; average 9.92ms; P95 17.93ms; P99 20.12ms; 0% failed | Saved `reports/performance-baseline.md` | Local Docker Compose; 300ms think time |
 | High-rate catalog soak | 5m @ 2,500 req/s; 750,000 requests; P95 0.84ms; P99 1.11ms; 0.07% client failures; no observed app 5xx | Documented result; raw k6 summary not retained | Not production capacity/SLA |
 | Payment idempotency drill | 30 concurrent requests; 100% HTTP success; 1 payment; 1 idempotency row; 0 duplicates | Documented k6 result; automated suite separately tests 8-way concurrency | Local command-deduplication evidence |

@@ -8,14 +8,14 @@ This repository is deliberately described by evidence rather than by configurati
 
 > **Verified repository baseline — 2026-08-10**
 >
-> - Phase 8 documentation baseline: **`phase8-docs-final` → `929bee0`**
-> - Phase 8 OCI milestone: **`phase8-oci-iac` → `ed626cb`**
-> - Phase 8 final documentation: **`phase8-docs-final` → `929bee0`**
-> - Independent clean-clone run: **146 tests passed, 0 failed, 0 errors, 0 skipped**
-> - Current JaCoCo: **89.54% instruction / 73.63% branch**, 111 analyzed classes
+> - `main` and `origin/main`: **`ff5e527`**
+> - Immutable milestones: **`phase8-docs-final` → `929bee0`**; **`phase8-oci-iac` → `ed626cb`**
+> - Independent clean-clone run: **172 tests passed, 0 failed, 0 errors, 0 skipped**
+> - Current JaCoCo: **92.55% instruction / 82.75% branch**, 112 analyzed classes
+> - Maven JaCoCo gate: **85% instruction / 75% branch — PASS**
 > - Latest-main documentation records: **CI PASS · CodeQL PASS · Supply Chain Security PASS**
 
-The inspected source, configuration, infrastructure, and verification paths match `main`. README, engineering-summary, and portfolio files were active documentation edits in the inspected working tree and are not represented as a completely clean repository state.
+The verification clone was clean and resolved exactly to `ff5e527261fd3ccdf3098151375c13264f5afef2`. The test and coverage figures above were regenerated from that commit with a working Docker environment; they are not copied from an older documentation snapshot.
 
 ## What is verified
 
@@ -43,9 +43,9 @@ The inspected source, configuration, infrastructure, and verification paths matc
 
 | Domain | As-built or observed state | Evidence boundary |
 |---|---|---|
-| Repository baseline | Phase 8 docs `929bee0`; OCI milestone `ed626cb` | `phase8-docs-final` and `phase8-oci-iac` preserve the two verified milestones |
-| Build and tests | 146 passed / 0 failed / 0 errors / 0 skipped | Independent clean-clone `./mvnw clean verify` |
-| Coverage | 89.54% instruction / 73.63% branch; 111 classes | Current rerun, distinct from historical coverage and the CI floor |
+| Repository | `main = origin/main = ff5e527`; docs tag `929bee0`; OCI tag `ed626cb` | Clean verification clone at the full current SHA |
+| Build and tests | 172 passed / 0 failed / 0 errors / 0 skipped | Independent clean-clone `./mvnw clean verify` |
+| Coverage | 92.55% instruction / 82.75% branch; 112 classes | Current rerun, distinct from historical coverage and both gate definitions |
 | Application | 3 replicas; HPA 3–8; PDB; probes; topology spread | Local kind; one control-plane |
 | PostgreSQL | 16 in Compose/Testcontainers; 17 in CloudNativePG ×3 | HA/restore evidence applies to CloudNativePG PostgreSQL 17 |
 | Kafka | 4.1.0 in Testcontainers; 4.1.2 in Compose/Kubernetes; KRaft ×3 drill | Version scopes are not interchangeable |
@@ -58,9 +58,10 @@ The inspected source, configuration, infrastructure, and verification paths matc
 
 | Coverage fact | Instruction | Branch | Meaning |
 |---|---:|---:|---|
-| Current clean verification | **89.54%** | **73.63%** | Release-current rerun used here |
+| Current clean verification | **92.55%** | **82.75%** | Release-current rerun used here |
 | Historical Phase 2.1 snapshot | 89.78% | 73.63% | Earlier evidence; not labeled current |
-| CI regression floor | 81.4756% | 68.2927% | Baseline gate with maximum drop `0.005` |
+| Maven hard gate | 85.00% | 75.00% | `jacoco-maven-plugin` bundle minimum; current run passed |
+| Regression reference | 81.4756% | 68.2927% | `coverage_baseline.py`; maximum absolute drop `0.005` |
 
 ---
 
@@ -105,6 +106,8 @@ The supply-chain and OCI paths are separate control boundaries. No deployment ed
 - Order-item snapshots preserve purchase-time name, price, and subtotal.
 - Order creation, stock deduction, cart deletion, and `ORDER_CREATED` Outbox insertion commit atomically.
 - Payment and cancellation serialize terminal order transitions through the same pessimistic order lock.
+- Production no longer exposes `/api/users/{userId}/orders/slow`; the duplicated slow-checkout implementation and all `Thread.sleep` calls were removed from `src/main/java`.
+- A narrow `OrderProcessingDelay` port keeps timing controllable in tests, while `NoOpOrderProcessingDelay` is the production implementation; the business checkout path remains single-sourced.
 
 ### Payment idempotency
 
@@ -209,7 +212,7 @@ Current Terraform rules allow `0.0.0.0/0` ingress to TCP **22, 80, 443, and 8080
 
 | Profile | Recorded result | Evidence quality | Claim boundary |
 |---|---|---|---|
-| Current Maven verification | 146/0/0/0; 49.896s; 111 classes | Direct clean-clone rerun | Automated verification, not runtime capacity |
+| Current Maven verification | 172/0/0/0; 49.278s; 112 classes | Direct clean-clone rerun at `ff5e527` | Automated verification, not runtime capacity |
 | Catalog read baseline | 9,544 requests; 79.44 req/s; avg 9.92ms; P95 17.93ms; P99 20.12ms; 0% failed | Saved `reports/performance-baseline.md` | Local Docker Compose; 300ms think time |
 | High-rate catalog soak | 5m @ 2,500 req/s; 750,000 requests; P95 0.84ms; P99 1.11ms; 0.07% client failures; no observed app 5xx | Documented result; raw k6 summary not retained | Not production capacity or an SLA |
 | Payment idempotency drill | 30 concurrent requests; 100% HTTP success; 1 payment row; 1 idempotency row; 0 duplicates | Documented k6 result; automated suite separately tests 8-way concurrency | Local deduplication evidence |
