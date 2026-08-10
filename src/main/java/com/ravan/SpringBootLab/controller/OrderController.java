@@ -97,22 +97,4 @@ public class OrderController {
                 )
         );
     }
-
-    @Operation(summary = "Create order slowly", description = "Create an order slowly for optimistic lock testing")
-    @PostMapping("/api/users/{userId}/orders/slow")
-    public ResponseEntity<ApiResponse<OrderResponse>> createOrderSlow(
-            @PathVariable Integer userId
-    ) {
-        currentUserService.requireUserIdOrAdmin(userId);
-
-        OrderResponse order = orderService.createOrderFromCartSlow(userId);
-
-        return ResponseEntity.ok(
-                new ApiResponse<>(
-                        200,
-                        "Order created successfully",
-                        order
-                )
-        );
-    }
 }
