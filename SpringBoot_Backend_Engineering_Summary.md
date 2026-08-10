@@ -1,8 +1,8 @@
 # Spring Boot E-Commerce Backend — System Architecture & Engineering Summary
 
-> **Evidence-led engineering review**  
-> Verification date: **2026-08-10**  
-> Current `main`: **`ff5e527`**  
+> **Evidence-led engineering review**
+> Verification date: **2026-08-10**
+> Verified source baseline: **`ff5e527`**
 > Immutable milestones: **`phase8-docs-final` → `929bee0`**; **`phase8-oci-iac` → `ed626cb`**
 
 ## Executive position
@@ -40,7 +40,7 @@ Classes:    112 analyzed
 Hard gate:  85% instruction / 75% branch — PASS
 ```
 
-`HEAD` and `origin/main` both resolved to `ff5e527261fd3ccdf3098151375c13264f5afef2`. The verification clone was clean, and the figures above were regenerated from that exact commit with Docker-backed Testcontainers.
+The isolated verification clone resolved to source baseline `ff5e527261fd3ccdf3098151375c13264f5afef2`. The figures above were regenerated from that exact commit with Docker-backed Testcontainers; they are not intended to identify the permanently moving repository `main` HEAD.
 
 ### 1.2 Version scope
 
@@ -58,7 +58,7 @@ Hard gate:  85% instruction / 75% branch — PASS
 
 | Coverage fact | Instruction | Branch | Allowed wording |
 |---|---:|---:|---|
-| Current clean verification | **92.55%** | **82.75%** | Current rerun used in this document |
+| Verified clean-clone baseline | **92.55%** | **82.75%** | Rerun at source baseline `ff5e527` |
 | Historical Phase 2.1 snapshot | 89.78% | 73.63% | Historical evidence only |
 | Maven hard gate | 85.00% | 75.00% | Bundle minimum enforced during `verify`; current run passed |
 | Regression reference | 81.4756% | 68.2927% | Secondary baseline script; maximum absolute drop `0.005` |
