@@ -1,0 +1,30 @@
+Order processing refactor verification
+Date: 2026-08-10
+
+Full suite:
+Tests: 172 passed, 0 failed, 0 errors, 0 skipped
+
+Coverage:
+INSTRUCTION 92.55% covered=7784 missed=627 total=8411
+BRANCH      82.75% covered=235 missed=49 total=284
+LINE        91.96% covered=2151 missed=188 total=2339
+METHOD      89.19% covered=627 missed=76 total=703
+CLASS       97.32% covered=109 missed=3 total=112
+
+OrderService:
+INSTRUCTION 98.65%
+BRANCH      100.00%
+LINE        100.00%
+METHOD      90.91%
+
+Production hygiene:
+- no Thread.sleep in src/main/java
+- /api/users/{userId}/orders/slow removed
+- createOrderFromCartSlow removed
+- duplicated checkout workflow removed
+- OrderProcessingDelay abstraction introduced
+- NoOpOrderProcessingDelay used as production implementation
+
+Verification:
+- mvnw clean verify: PASS
+- JaCoCo gate: PASS

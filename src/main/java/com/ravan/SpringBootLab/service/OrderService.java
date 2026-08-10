@@ -39,6 +39,7 @@ public class OrderService {
     private final UserRepository userRepository;
     private final ProductRepository productRepository;
     private final OutboxEventService outboxEventService;
+    private final OrderProcessingDelay orderProcessingDelay;
 
     public OrderService(
             OrderRepository orderRepository,
@@ -46,7 +47,8 @@ public class OrderService {
             CartItemRepository cartItemRepository,
             UserRepository userRepository,
             ProductRepository productRepository,
-            OutboxEventService outboxEventService
+            OutboxEventService outboxEventService,
+            OrderProcessingDelay orderProcessingDelay
     ) {
         this.orderRepository = orderRepository;
         this.orderItemRepository = orderItemRepository;
@@ -54,6 +56,7 @@ public class OrderService {
         this.userRepository = userRepository;
         this.productRepository = productRepository;
         this.outboxEventService = outboxEventService;
+        this.orderProcessingDelay = orderProcessingDelay;
     }
 
     @Transactional
@@ -84,6 +87,8 @@ public class OrderService {
 
             totalAmount = totalAmount.add(subtotal);
         }
+
+        orderProcessingDelay.delay();
 
         Order order = new Order(user, totalAmount, OrderStatus.PENDING);
         Order savedOrder = orderRepository.save(order);
@@ -125,85 +130,6 @@ public class OrderService {
                 )
         );
 
-        return getOrderById(savedOrder.getId());
-    }
-
-    @Transactional
-    public OrderResponse createOrderFromCartSlow(Integer userId) {
-        User user = userRepository.findById(userId)
-        .orElseThrow(() -> new UserNotFoundException(userId));
-        
-        List<CartItem> cartItems = cartItemRepository.findByUser(user);
-        
-        if (cartItems.isEmpty()) {
-                throw new EmptyCartException(userId);
-        }
-        
-        BigDecimal totalAmount = BigDecimal.ZERO;
-        
-        for (CartItem cartItem : cartItems) {
-                Product product = cartItem.getProduct();
-                
-                if (cartItem.getQuantity() > product.getStock()) {
-                        throw new InsufficientStockException(
-                                "Insufficient stock for product: " + product.getName()
-                                + ". Available stock: " + product.getStock()
-                        );
-                }
-                
-                BigDecimal subtotal = product.getPrice()
-                .multiply(BigDecimal.valueOf(cartItem.getQuantity()));
-                
-                totalAmount = totalAmount.add(subtotal);
-        }
-        
-        try {
-                Thread.sleep(5000);
-        } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-        }
-        
-        Order order = new Order(user, totalAmount, OrderStatus.PENDING);
-        Order savedOrder = orderRepository.save(order);
-        
-        for (CartItem cartItem : cartItems) {
-                Product product = cartItem.getProduct();
-                
-                product.setStock(product.getStock() - cartItem.getQuantity());
-                product.setUpdatedAt(LocalDateTime.now());
-                
-                productRepository.save(product);
-                
-                BigDecimal subtotal = product.getPrice()
-                .multiply(BigDecimal.valueOf(cartItem.getQuantity()));
-                
-                OrderItem orderItem = new OrderItem(
-                        savedOrder,
-                        product,
-                        product.getName(),
-                        product.getPrice(),
-                        cartItem.getQuantity(),
-                        subtotal
-                );
-                
-                orderItemRepository.save(orderItem);
-        }
-        
-        cartItemRepository.deleteAll(cartItems);
-
-        outboxEventService.saveEvent(
-                "ORDER",
-                String.valueOf(savedOrder.getId()),
-                "ORDER_CREATED",
-                KafkaTopicConfig.ORDER_CREATED_TOPIC,
-                new OrderCreatedEvent(
-                        savedOrder.getId(),
-                        user.getId(),
-                        savedOrder.getTotalAmount(),
-                        savedOrder.getCreatedAt()
-                )
-        );
-        
         return getOrderById(savedOrder.getId());
     }
 

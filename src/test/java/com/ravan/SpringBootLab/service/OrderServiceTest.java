@@ -55,6 +55,9 @@ class OrderServiceTest {
     @Mock
     private OutboxEventService outboxEventService;
 
+    @Mock
+    private OrderProcessingDelay orderProcessingDelay;
+
     private OrderService orderService;
     private User user;
     private Product product;
@@ -70,7 +73,8 @@ class OrderServiceTest {
                 cartItemRepository,
                 userRepository,
                 productRepository,
-                outboxEventService
+                outboxEventService,
+                orderProcessingDelay
         );
 
         user = new User("Ravan", "ravan@example.com", "backend", "hash", "USER");
@@ -144,6 +148,24 @@ class OrderServiceTest {
                 anyString(),
                 any(OrderCreatedEvent.class)
         );
+    }
+
+    @Test
+    void createOrderFromCartInvokesProcessingDelay() {
+        when(userRepository.findById(1)).thenReturn(Optional.of(user));
+        when(cartItemRepository.findByUser(user)).thenReturn(List.of(cartItem));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> {
+            Order saved = invocation.getArgument(0);
+            saved.setId(4);
+            return saved;
+        });
+        when(orderRepository.findById(4)).thenReturn(Optional.of(order));
+        when(orderItemRepository.findByOrder(any(Order.class)))
+                .thenReturn(List.of(orderItem));
+
+        orderService.createOrderFromCart(1);
+
+        verify(orderProcessingDelay, times(1)).delay();
     }
 
     @Test
