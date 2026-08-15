@@ -64,7 +64,7 @@ resource "oci_core_security_list" "springboot_default" {
 
   ingress_security_rules {
     protocol    = "6"
-    source      = "0.0.0.0/0"
+    source      = var.ssh_allowed_cidr
     source_type = "CIDR_BLOCK"
     stateless   = false
 
@@ -153,9 +153,9 @@ resource "oci_core_network_security_group_security_rule" "ssh" {
   network_security_group_id = oci_core_network_security_group.springboot_ingress.id
   direction                 = "INGRESS"
   protocol                  = "6"
-  source                    = "0.0.0.0/0"
+  source                    = var.ssh_allowed_cidr
   source_type               = "CIDR_BLOCK"
-  description               = "SSH"
+  description               = "SSH restricted management access"
 
   tcp_options {
     destination_port_range {
@@ -193,22 +193,6 @@ resource "oci_core_network_security_group_security_rule" "https" {
     destination_port_range {
       min = 443
       max = 443
-    }
-  }
-}
-
-resource "oci_core_network_security_group_security_rule" "spring_boot" {
-  network_security_group_id = oci_core_network_security_group.springboot_ingress.id
-  direction                 = "INGRESS"
-  protocol                  = "6"
-  source                    = "0.0.0.0/0"
-  source_type               = "CIDR_BLOCK"
-  description               = "Spring Boot"
-
-  tcp_options {
-    destination_port_range {
-      min = 8080
-      max = 8080
     }
   }
 }

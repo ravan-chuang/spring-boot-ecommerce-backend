@@ -1,0 +1,5 @@
+[0m[1moci_core_network_security_group_security_rule.ssh: Modifying... [id=<OCI_RESOURCE_ID>][0m[0m
+[0m[1moci_core_security_list.springboot_default: Modifying... [id=<OCI_RESOURCE_ID>][0m[0m
+[0m[1moci_core_security_list.springboot_default: Modifications complete after 0s [id=<OCI_RESOURCE_ID>][0m
+[0m[1moci_core_network_security_group_security_rule.ssh: Modifications complete after 0s [id=<OCI_RESOURCE_ID>][0m
+Apply complete! Resources: 0 added, 2 changed, 1 destroyed.[0m

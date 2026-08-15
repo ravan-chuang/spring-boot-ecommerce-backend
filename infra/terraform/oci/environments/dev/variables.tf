@@ -30,3 +30,13 @@ variable "ssh_authorized_key" {
   description = "SSH public key configured on the dev compute instance."
   type        = string
 }
+
+variable "ssh_allowed_cidr" {
+  description = "CIDR permitted to access SSH on the OCI development VM."
+  type        = string
+
+  validation {
+    condition     = can(cidrnetmask(var.ssh_allowed_cidr)) && var.ssh_allowed_cidr != "0.0.0.0/0"
+    error_message = "ssh_allowed_cidr must be a valid restricted CIDR and must not be 0.0.0.0/0."
+  }
+}

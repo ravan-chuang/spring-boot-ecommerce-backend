@@ -1,0 +1,17 @@
+=== WHO ===
+uid=988(ocarun) gid=990(oracle-cloud-agent) groups=990(oracle-cloud-agent),4(adm) context=system_u:system_r:unconfined_service_t:s0
+=== DF BLOCKS ===
+Filesystem                 Type      Size  Used Avail Use% Mounted on
+devtmpfs                   devtmpfs  4.0M     0  4.0M   0% /dev
+tmpfs                      tmpfs     474M     0  474M   0% /dev/shm
+tmpfs                      tmpfs     190M  4.1M  186M   3% /run
+efivarfs                   efivarfs  256K   28K  224K  12% /sys/firmware/efi/efivars
+/dev/mapper/ocivolume-root xfs        30G  5.4G   25G  19% /
+/dev/sda2                  xfs       2.0G  453M  1.5G  23% /boot
+/dev/mapper/ocivolume-oled xfs        15G  176M   15G   2% /var/oled
+/dev/sda1                  vfat      100M  7.7M   93M   8% /boot/efi
+tmpfs                      tmpfs      95M     0   95M   0% /run/user/988
+=== DF INODES ===
+Filesystem                 Inodes IUsed IFree IUse% Mounted on
+devtmpfs                     101K   434  100K    1% /dev
+tmpfs                        119K   ...
