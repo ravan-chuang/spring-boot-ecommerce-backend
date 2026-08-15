@@ -1,0 +1,59 @@
+PHASE 9 OCI VM RECOVERY — FINAL ACCEPTANCE
+Captured: 2026-08-15 04:04:33 UTC
+Result: PASS
+
+IDENTITY
+hostname: instance-20260728-0108
+kernel: 6.12.0-204.92.4.3.1.el9uek.x86_64
+
+MEMORY
+total: 946Mi
+available: 499Mi
+swap: 497Mi
+swap used: 0
+
+FILESYSTEM
+/: /dev/mapper/oldvm-root, XFS, 30G, 19% used
+/boot: /dev/sda2, XFS, 2.0G, 23% used
+/boot/efi: /dev/sda1, VFAT, 100M, 8% used
+/var/oled: /dev/mapper/oldvm-oled, XFS, 15G, 2% used
+
+LVM
+PV: /dev/sda3
+VG: oldvm
+VG size: 44.50G
+VG free: 0
+
+LV root: 29.50G, active
+LV oled: 15.00G, active
+
+ACTIVE BOOT INVARIANTS
+root=/dev/mapper/oldvm-root
+rd.lvm.vg=oldvm
+rd.lvm.lv=oldvm/root
+
+SERVICES
+sshd: active
+oracle-cloud-agent: active
+mcelog: disabled
+kdump: disabled
+kdump active: inactive
+
+SYSTEMD
+failed units: 0
+
+LEGACY CONFIGURATION
+live ocivolume references: NONE
+live crashkernel= references: NONE
+
+NON-BLOCKING BOOT WARNING
+auditd: Email option is specified but /usr/lib/sendmail does not seem executable.
+
+RECOVERY VALIDATION
+controlled reboot: PASS
+post-reboot SSH: PASS
+post-reboot LVM mounts: PASS
+OCI Agent: PASS
+
+FINAL RESULT
+PHASE 9 ACCEPTANCE: PASS

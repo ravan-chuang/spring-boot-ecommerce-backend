@@ -1,0 +1,15 @@
+      - source                    = "0.0.0.0/0" -> null
+      - time_created              = "2026-07-27 17:36:22.192 +0000 UTC" -> null
+          - destination_port_range {
+              - max = 8080 -> null
+              - min = 8080 -> null
+      ~ source                    = "0.0.0.0/0" -> "<RESTRICTED_ADMIN_CIDR>"
+          - source      = "0.0.0.0/0" -> null
+          - source      = "0.0.0.0/0" -> null
+              - max = 22 -> null
+              - min = 22 -> null
+          + source      = "0.0.0.0/0"
+          + source      = "<RESTRICTED_ADMIN_CIDR>"
+              + max = 22
+              + min = 22
+Plan: 0 to add, 2 to change, 1 to destroy.
